@@ -80,6 +80,16 @@
   .table .actions button{flex:1}
   .occ .actions .primary{background:#fff;color:var(--felt-deep)}
 
+  /* disponibilités */
+  .dispo{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
+  .dispo h3{margin:0 0 8px;font-family:"Barlow Semi Condensed",sans-serif;font-size:17px;font-weight:700}
+  .dispo .d{display:flex;gap:10px;padding:5px 0;font-size:15px;align-items:baseline}
+  .dispo .d b{font-family:"Barlow Semi Condensed",sans-serif;min-width:34px;color:var(--muted)}
+  .dispo .d.free b{color:#3FC97C}
+  .dispo .d small{color:var(--muted)}
+  .t-libre{font-size:14px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.08);color:#fff}
+  .t-libre.over{background:rgba(232,163,61,.25)}
+
   /* lists */
   .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -149,6 +159,7 @@
 
 <main>
   <section id="tab-tables" class="on">
+    <div class="dispo" id="dispo"></div>
     <div class="grid" id="grid"></div>
   </section>
 
@@ -211,6 +222,7 @@ const TOLERANCE_MIN = 3;       // 33 min = 1 bloc, 34 min = 2 blocs
 const SEUIL_OFFRE   = 10000;   // achat >= ce montant => 30 min offertes
 const STAFF = ["Sisih","Patrick","Tommy","Haja","Satchio","Mikaela"];
 const DUREES_RESA = [30,60,90,120,180,240,300,360];
+const DUREES_PREVUES = [0,30,60,90,120,180,240,300,360];   // 0 = non précisée
 const JOURS_JOURNAL = 60;
 
 /* ============================================================
@@ -392,7 +404,25 @@ function prochaineResa(t) {
     .sort((a,b) => a.heure.localeCompare(b.heure))[0];
 }
 
+/* Quand une table se libère ? (pour répondre au téléphone) */
+function etatTable(t) {
+  const s = enCours(t), r = prochaineResa(t), now = Date.now();
+  const resaTxt = r ? `réservée ${r.heure}–${fmtTime(hmToMs(r.jour,r.heure)+Number(r.duree)*60000)}` : "";
+  if (!s) return { libre: true, txt: "libre maintenant", sub: resaTxt ? "puis " + resaTxt : "" };
+  const debut = tsMs(s.debut), prevu = Number(s.duree_prevue||0);
+  if (!prevu) return { libre: false, txt: "en jeu, durée non précisée", sub: `depuis ${fmtTime(debut)}` + (resaTxt ? " · " + resaTxt : "") };
+  const fin = debut + prevu*60000, diff = (fin - now)/60000;
+  if (diff > 0) return { libre: false, txt: `libre vers ${fmtTime(fin)}`, sub: `dans ${fmtDur(diff)}` + (resaTxt ? " · " + resaTxt : ""), fin };
+  return { libre: false, txt: `devait finir à ${fmtTime(fin)}`, sub: `dépassé de ${fmtDur(-diff)}` + (resaTxt ? " · " + resaTxt : ""), fin, over: true };
+}
+function renderDispo() {
+  let html = `<h3>Disponibilités</h3>`;
+  for (let t = 1; t <= NB_TABLES; t++) { const e = etatTable(t); html += `<div class="d ${e.libre?"free":""}"><b>T${t}</b><span>${e.txt}${e.sub ? ` <small>· ${e.sub}</small>` : ""}</span></div>`; }
+  $("dispo").innerHTML = html;
+}
+
 function renderTables() {
+  renderDispo();
   const g = $("grid"); let html = "";
   for (let t = 1; t <= NB_TABLES; t++) {
     const s = enCours(t), r = prochaineResa(t);
@@ -411,8 +441,9 @@ function renderTables() {
         <div class="t-timer" data-timer>${fmtClock(Date.now()-debut)}</div>
         <div class="t-meta"><span>${s.achat ? "achat " + fmtAr(s.achat) : "pas d'achat"}</span><span>${s.offert ? "30 min offertes" : ""}</span></div>
         <div class="t-due"><b data-montant>${fmtAr(calcTarif(debut, Date.now(), s.achat, s.offert).montant)}</b><small>à payer si arrêt maintenant</small></div>
+        <div class="t-libre ${etatTable(t).over?"over":""}" data-libre>${etatTable(t).txt}${Number(s.duree_prevue) ? " · " + etatTable(t).sub.split(" · ")[0] : ""}</div>
         ${resaHtml}
-        <div class="actions"><button class="ghost" data-action="ajuster-achat" data-id="${s.id}">Achat</button><button class="primary" data-action="terminer" data-id="${s.id}">Terminer</button></div>
+        <div class="actions"><button class="ghost" data-action="ajuster-achat" data-id="${s.id}">Achat / durée</button><button class="primary" data-action="terminer" data-id="${s.id}">Terminer</button></div>
       </article>`;
     } else {
       html += `<article class="table libre">
@@ -428,7 +459,7 @@ function renderTables() {
 
 function tick() {
   if (todayStr() !== S.listenersDay && S.user) { startListeners(); }
-  if (new Date().getSeconds() === 0 && !$("overlay").classList.contains("on")) renderTables();
+  if (new Date().getSeconds() % 30 === 0 && !$("overlay").classList.contains("on")) renderTables();
   document.querySelectorAll(".table.occ").forEach(card => {
     const debut = Number(card.dataset.debut), now = Date.now();
     card.querySelector("[data-timer]").textContent = fmtClock(now - debut);
@@ -515,6 +546,9 @@ function fillContactFromName(nomId, contactId) {
     if (j && j.contact && !$(contactId).value) $(contactId).value = j.contact;
   });
 }
+function dureePrevueSelect(id, cur) {
+  return `<select id="${id}">${DUREES_PREVUES.map(d => `<option value="${d}" ${Number(cur||0)===d?"selected":""}>${d ? fmtDur(d) : "Pas précisée"}</option>`).join("")}</select>`;
+}
 function bindOffreAuto(achatId, offertId) {
   $(achatId).addEventListener("input", () => { $(offertId).checked = Number($(achatId).value||0) >= SEUIL_OFFRE; });
 }
@@ -531,7 +565,10 @@ function modalDemarrer(t, resa) {
         <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="0" inputmode="numeric"></div>
       </div>
       <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert"> 30 min offertes (auto si achat ≥ ${SEUIL_OFFRE.toLocaleString("fr-FR")} Ar)</label></div>
-      <div class="field"><label>Saisi par</label>${staffSelect("par")}</div>
+      <div class="row">
+        <div class="field"><label>Durée prévue (ce que dit le client)</label>${dureePrevueSelect("prevu", resa ? resa.duree : 0)}</div>
+        <div class="field"><label>Saisi par</label>${staffSelect("par")}</div>
+      </div>
       <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Démarrer</button></div>
     </form>`);
   fillContactFromName("nom","contact"); bindOffreAuto("achat","offert");
@@ -542,7 +579,7 @@ function modalDemarrer(t, resa) {
     let debut = hmToMs(todayStr(), $("heure").value); if (debut > Date.now() + 60000) debut = Date.now();
     const par = readStaff("par");
     try {
-      const ref = await addDoc(collection(db,"sessions"), { table: t, nom, contact, debut: Timestamp.fromMillis(debut), fin: null, achat, offert, montant: null, statut: "en_cours", par, creeLe: Timestamp.now(), resaId: resa ? resa.id : null });
+      const ref = await addDoc(collection(db,"sessions"), { table: t, nom, contact, debut: Timestamp.fromMillis(debut), fin: null, achat, offert, duree_prevue: Number($("prevu").value||0), montant: null, statut: "en_cours", par, creeLe: Timestamp.now(), resaId: resa ? resa.id : null });
       if (resa) await updateDoc(doc(db,"reservations",resa.id), { statut: "arrivee", sessionId: ref.id });
       closeModal(); toast("Table " + t + " démarrée pour " + nom);
       upsertJoueur(nom, contact);
@@ -590,16 +627,17 @@ function modalTerminer(id) {
 
 function modalAchat(id) {
   const s = S.sessions.find(x => x.id === id); if (!s) return;
-  openModal(`<h2>Achat — ${esc(s.nom)}</h2><p class="note">Le montant des consommations, pour déclencher les 30 min offertes.</p>
+  openModal(`<h2>${esc(s.nom)} — achat / durée</h2><p class="note">Consommations (pour les 30 min offertes) et durée annoncée par le client (pour savoir quand la table se libère).</p>
     <form id="f">
       <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}" inputmode="numeric"></div>
       <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      <div class="field"><label>Durée prévue (depuis le début de la partie)</label>${dureePrevueSelect("prevu", s.duree_prevue)}</div>
       <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Enregistrer</button></div>
     </form>`);
   bindOffreAuto("achat","offert");
   $("f").addEventListener("submit", async e => {
     e.preventDefault();
-    try { await updateDoc(doc(db,"sessions",id), { achat: Number($("achat").value||0), offert: $("offert").checked }); closeModal(); toast("Achat enregistré"); }
+    try { await updateDoc(doc(db,"sessions",id), { achat: Number($("achat").value||0), offert: $("offert").checked, duree_prevue: Number($("prevu").value||0) }); closeModal(); toast("Enregistré"); }
     catch (err) { fail(err); }
   });
 }
@@ -658,7 +696,10 @@ function modalEditSession(id) {
         <div class="field"><label>Achat (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}"></div>
         <div class="field"><label>Montant encaissé (Ar)</label><input id="montant" type="number" min="0" step="500" value="${s.montant??""}"></div>
       </div>
-      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      <div class="row">
+        <div class="field"><label style="display:flex;align-items:center;color:var(--cream);margin-top:26px"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+        <div class="field"><label>Durée prévue</label>${dureePrevueSelect("prevu", s.duree_prevue)}</div>
+      </div>
       <div class="field"><button type="button" class="ghost sm" id="recalc">Recalculer le montant selon le tarif</button></div>
       <div class="field"><label>Note</label><input id="note" value="${esc(s.note||"")}" placeholder="ex. correction heure oubliée"></div>
       <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="gold">Enregistrer</button></div>
@@ -671,7 +712,7 @@ function modalEditSession(id) {
     e.preventDefault();
     const statut = $("statut").value, debut = new Date($("debut").value).getTime();
     const fin = statut === "terminee" && $("fin").value ? new Date($("fin").value).getTime() : null;
-    const data = { nom: $("nom").value.trim(), contact: $("contact").value.trim(), table: Number($("table").value), statut, debut: Timestamp.fromMillis(debut), fin: fin ? Timestamp.fromMillis(fin) : null, achat: Number($("achat").value||0), offert: $("offert").checked, montant: statut === "terminee" ? Number($("montant").value||0) : null, note: $("note").value.trim(), modifieLe: Timestamp.now() };
+    const data = { nom: $("nom").value.trim(), contact: $("contact").value.trim(), table: Number($("table").value), statut, debut: Timestamp.fromMillis(debut), fin: fin ? Timestamp.fromMillis(fin) : null, achat: Number($("achat").value||0), offert: $("offert").checked, duree_prevue: Number($("prevu").value||0), montant: statut === "terminee" ? Number($("montant").value||0) : null, note: $("note").value.trim(), modifieLe: Timestamp.now() };
     if (fin) { data.duree_min = Math.round((fin - debut)/60000); data.blocs = calcTarif(debut, fin, data.achat, data.offert).blocs; }
     try { await updateDoc(doc(db,"sessions",id), data); closeModal(); toast("Partie modifiée"); } catch (err) { fail(err); }
   });
