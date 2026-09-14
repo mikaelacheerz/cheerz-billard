@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C211E">
+<title>Cheerz · Billard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1C211E; --surface:#262D29; --surface2:#313A35; --line:#3C4741;
+    --felt:#1F6B48; --felt-deep:#144A32; --felt-glow:rgba(46,160,108,.35);
+    --cream:#F3EFE6; --muted:#A6AFA9; --dim:#7C857F;
+    --chalk:#5BA4D6; --gold:#E3B75A; --red:#D9534F; --amber:#E8A33D;
+    --r:14px; --r-sm:9px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--cream);font-family:Barlow,system-ui,sans-serif;font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer;border:0;border-radius:var(--r-sm);padding:12px 16px;background:var(--surface2);color:var(--cream);font-weight:600}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
+  button.primary{background:var(--felt);color:#fff}
+  button.gold{background:var(--gold);color:#2A2210}
+  button.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  button.sm{padding:7px 11px;font-size:14px;border-radius:7px}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 12px;color:var(--cream)}
+  input[type=checkbox]{width:auto;accent-color:var(--felt);transform:scale(1.25);margin-right:8px}
+  label{display:block;font-size:14px;color:var(--muted);margin-bottom:5px}
+  .field{margin-bottom:14px}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  small{color:var(--muted)}
+  .hidden{display:none!important}
+
+  /* header */
+  .top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .brand{font-family:"Barlow Semi Condensed",Barlow,sans-serif;font-weight:700;font-size:22px;letter-spacing:.01em}
+  .brand span{color:var(--gold);font-weight:600}
+  .status{flex:1;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
+  .dot.on{background:#3FC97C;box-shadow:0 0 0 3px rgba(63,201,124,.2)}
+  .dot.off{background:var(--red)}
+  .adminbtn{font-size:14px;padding:8px 12px}
+  .adminbtn.is-admin{background:var(--gold);color:#2A2210}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;padding:10px 12px 0;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:56px;z-index:4;overflow-x:auto}
+  .tabs button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;padding:10px 14px;border-bottom:3px solid transparent;font-weight:600;white-space:nowrap}
+  .tabs button.on{color:var(--cream);border-bottom-color:var(--gold)}
+  .tabs button .n{display:inline-block;min-width:20px;text-align:center;background:var(--surface2);border-radius:10px;font-size:12px;padding:1px 6px;margin-left:6px;color:var(--cream)}
+
+  main{padding:16px 12px 90px;max-width:960px;margin:0 auto}
+  section{display:none}section.on{display:block}
+
+  /* tables grid */
+  .grid{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:600px){.grid{grid-template-columns:1fr 1fr}}
+  .table{background:var(--surface);border-radius:var(--r);padding:16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:10px;position:relative}
+  .table.occ{background:linear-gradient(160deg,var(--felt) 0%,var(--felt-deep) 100%);border-color:transparent;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 14px 40px -20px var(--felt-glow)}
+  .t-head{display:flex;justify-content:space-between;align-items:baseline}
+  .t-num{font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;font-size:20px}
+  .t-state{font-size:13px;color:var(--muted)}
+  .occ .t-state{color:#CFE9DA}
+  .t-player{font-size:19px;font-weight:600;display:flex;flex-direction:column;line-height:1.2}
+  .t-player small{color:#CFE9DA;font-weight:400;font-size:14px}
+  .t-timer{font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;font-size:54px;line-height:1;letter-spacing:.01em;font-variant-numeric:tabular-nums;margin:6px 0 2px}
+  .t-timer.idle{color:var(--line);font-size:44px}
+  .t-meta{display:flex;justify-content:space-between;font-size:14px;color:#CFE9DA;gap:10px;flex-wrap:wrap}
+  .t-due{display:flex;align-items:baseline;gap:8px}
+  .t-due b{font-family:"Barlow Semi Condensed",sans-serif;font-size:28px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
+  .t-due small{color:#CFE9DA}
+  .t-resa{font-size:14px;padding:8px 10px;border-radius:8px;background:rgba(91,164,214,.15);border-left:3px solid var(--chalk);color:var(--cream)}
+  .t-resa.warn{background:rgba(232,163,61,.18);border-left-color:var(--amber)}
+  .t-resa.late{background:rgba(217,83,79,.2);border-left-color:var(--red)}
+  .table .actions{display:flex;gap:8px;margin-top:4px}
+  .table .actions button{flex:1}
+  .occ .actions .primary{background:#fff;color:var(--felt-deep)}
+
+  /* lists */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .toolbar input,.toolbar select{width:auto;padding:9px 10px}
+  .toolbar .spacer{flex:1}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px}
+  .kpi b{display:block;font-family:"Barlow Semi Condensed",sans-serif;font-size:24px;color:var(--gold);font-variant-numeric:tabular-nums}
+  .kpi span{font-size:13px;color:var(--muted)}
+  .line{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line)}
+  .line:last-child{border-bottom:0}
+  .line .when{font-variant-numeric:tabular-nums;font-weight:600;min-width:96px;line-height:1.25}
+  .line .when small{display:block;font-weight:400}
+  .line .who{flex:1;min-width:0}
+  .line .who b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .line .who small{display:block}
+  .line .amt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--gold);white-space:nowrap}
+  .line .ops{display:flex;gap:6px}
+  .tag{display:inline-block;font-size:12px;padding:2px 7px;border-radius:6px;background:var(--surface2);color:var(--muted);margin-left:6px;vertical-align:middle}
+  .tag.t{background:var(--felt-deep);color:#CFE9DA}
+  .tag.off{background:rgba(227,183,90,.2);color:var(--gold)}
+  .tag.live{background:rgba(63,201,124,.2);color:#8FE3B4}
+  .tag.cancel{background:rgba(217,83,79,.15);color:var(--red)}
+  .tag.done{background:rgba(91,164,214,.15);color:var(--chalk)}
+  .day-h{font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;font-size:18px;margin:18px 4px 6px;color:var(--cream)}
+  .empty{padding:28px 12px;text-align:center;color:var(--muted)}
+
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:20;padding:0}
+  @media(min-width:600px){.overlay{align-items:center;padding:20px}}
+  .overlay.on{display:flex}
+  .modal{background:var(--surface);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px 24px;border:1px solid var(--line)}
+  @media(min-width:600px){.modal{border-radius:18px}}
+  .modal h2{font-family:"Barlow Semi Condensed",sans-serif;margin:0 0 14px;font-size:22px}
+  .modal .foot{display:flex;gap:10px;margin-top:8px}
+  .modal .foot button{flex:1}
+  .recap{background:var(--bg);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;display:grid;grid-template-columns:1fr auto;row-gap:6px;font-variant-numeric:tabular-nums}
+  .recap .big{font-family:"Barlow Semi Condensed",sans-serif;font-size:26px;color:var(--gold);font-weight:700}
+  .recap .k{color:var(--muted)}
+  .note{font-size:14px;color:var(--muted);margin:-6px 0 12px}
+  .warnbox{background:rgba(232,163,61,.15);border-left:3px solid var(--amber);padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:14px}
+
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--cream);color:#1C211E;padding:11px 16px;border-radius:10px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30;max-width:90vw;text-align:center}
+  #toast.on{opacity:1}
+  #toast.err{background:var(--red);color:#fff}
+
+  .setup{max-width:640px;margin:40px auto;padding:0 16px;color:var(--muted)}
+  .setup h1{color:var(--cream);font-family:"Barlow Semi Condensed",sans-serif}
+  .setup code{background:var(--surface);padding:2px 6px;border-radius:5px;color:var(--gold)}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">Cheerz <span>billard</span></div>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connexion…</span></div>
+  <button class="adminbtn" id="adminBtn">Admin</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="tables" class="on">Tables</button>
+  <button data-tab="resa">Réservations<span class="n" id="nResa">0</span></button>
+  <button data-tab="journal">Journal</button>
+  <button data-tab="joueurs">Joueurs</button>
+</nav>
+
+<main>
+  <section id="tab-tables" class="on">
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="tab-resa">
+    <div class="toolbar">
+      <button class="primary" data-action="new-resa">+ Nouvelle réservation</button>
+      <span class="spacer"></span>
+      <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="resaShowOld" style="transform:none"> voir annulées / arrivées</label>
+    </div>
+    <div id="resaList"></div>
+  </section>
+
+  <section id="tab-journal">
+    <div class="toolbar">
+      <input type="date" id="jDate">
+      <button class="ghost sm" id="jToday">Aujourd'hui</button>
+      <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="jAll" style="transform:none"> 60 derniers jours</label>
+      <span class="spacer"></span>
+      <button class="ghost sm" id="jCsv">Exporter CSV</button>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b id="kSessions">0</b><span>parties</span></div>
+      <div class="kpi"><b id="kMinutes">0h</b><span>temps joué</span></div>
+      <div class="kpi"><b id="kTotal">0 Ar</b><span>encaissé billard</span></div>
+    </div>
+    <div class="card" id="journalList"></div>
+  </section>
+
+  <section id="tab-joueurs">
+    <div class="toolbar">
+      <input type="search" id="jSearch" placeholder="Rechercher un nom ou un numéro" style="flex:1">
+    </div>
+    <div class="card" id="joueursList"></div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+<datalist id="joueursDL"></datalist>
+
+<script type="module">
+/* ============================================================
+   1. CONFIGURATION — à remplir une seule fois
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCuefPjp3OAATQMU7f8-jgwWPDzQcnNBfg",
+  authDomain: "cheerz-billard.firebaseapp.com",
+  projectId: "cheerz-billard",
+  storageBucket: "cheerz-billard.firebasestorage.app",
+  messagingSenderId: "378623269440",
+  appId: "1:378623269440:web:1cffc08a0550f339cf5da5"
+};
+const ADMIN_EMAIL = "mikaela.mamitiana@gmail.com";   // même email que dans les règles Firestore
+
+/* Réglages métier */
+const NB_TABLES     = 4;
+const PRIX_BLOC     = 3000;    // Ar par tranche de 30 min (=> 6000 Ar / heure)
+const BLOC_MIN      = 30;
+const TOLERANCE_MIN = 3;       // 33 min = 1 bloc, 34 min = 2 blocs
+const SEUIL_OFFRE   = 10000;   // achat >= ce montant => 30 min offertes
+const STAFF = ["Sisih","Patrick","Tommy","Haja","Satchio","Mikaela"];
+const DUREES_RESA = [30,60,90,120,180,240,300,360];
+const JOURS_JOURNAL = 60;
+
+/* ============================================================
+   2. Écran de configuration si le fichier n'est pas encore rempli
+   ============================================================ */
+if (firebaseConfig.apiKey === "COLLER_ICI") {
+  document.body.innerHTML = `<div class="setup">
+    <h1>Cheerz billard — configuration</h1>
+    <p>Le fichier n'est pas encore relié à Firebase. Ouvre <code>index.html</code>, remplace les 6 valeurs <code>COLLER_ICI</code> par celles de ton projet Firebase (Paramètres du projet → Vos applications → Configuration), puis recharge.</p>
+    <p>Le guide d'installation complet est dans <code>GUIDE_INSTALLATION.md</code>.</p></div>`;
+  throw new Error("config manquante");
+}
+
+/* ============================================================
+   3. Firebase
+   ============================================================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore,
+  collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, onSnapshot, query, where, Timestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) { db = getFirestore(app); }
+
+/* ============================================================
+   4. État
+   ============================================================ */
+const S = {
+  user: null, isAdmin: false,
+  sessions: [],      // 60 derniers jours + en cours
+  resas: [],         // aujourd'hui et futur
+  joueurs: [],
+  unsubs: [], listenersDay: null,
+  tab: "tables",
+  jDate: todayStr(), jAll: false, jSearch: ""
+};
+const $ = id => document.getElementById(id);
+
+/* ============================================================
+   5. Helpers
+   ============================================================ */
+function todayStr(d = new Date()) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function fmtTime(ms) { return new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}); }
+function fmtDateLong(str) {
+  const [y,m,d] = str.split("-").map(Number);
+  return new Date(y,m-1,d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+}
+function fmtDur(min) { min = Math.round(min||0); const h = Math.floor(min/60), m = min%60; return h ? (m ? `${h}h${String(m).padStart(2,"0")}` : `${h}h`) : `${m} min`; }
+function fmtClock(ms) { const s = Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), sec=s%60; return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`; }
+function fmtAr(n) { return (Math.round(n||0)).toLocaleString("fr-FR") + " Ar"; }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toLocalInput(ms) { const d = new Date(ms); return todayStr(d) + "T" + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
+function nowHM() { const d = new Date(); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
+function hmToMs(jour, hm) { const [y,m,d] = jour.split("-").map(Number); const [h,mi] = hm.split(":").map(Number); return new Date(y,m-1,d,h,mi).getTime(); }
+function tsMs(t) { return t && typeof t.toMillis === "function" ? t.toMillis() : (typeof t === "number" ? t : null); }
+function normContact(c) { return String(c||"").replace(/\D/g,""); }
+function joueurId(nom, contact) { const c = normContact(contact); return c.length >= 6 ? "c_" + c : "n_" + String(nom||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-"); }
+
+/* Tarification : blocs de 30 min, tolérance, 30 min offertes */
+function calcTarif(debutMs, finMs, achat, offert) {
+  const minutes = Math.max(0, (finMs - debutMs) / 60000);
+  let blocs = Math.max(1, Math.ceil((minutes - TOLERANCE_MIN) / BLOC_MIN));
+  const blocsFactures = Math.max(0, blocs - (offert ? 1 : 0));
+  return { minutes, blocs, blocsFactures, montant: blocsFactures * PRIX_BLOC };
+}
+
+function toast(msg, err=false) {
+  const t = $("toast"); t.textContent = msg; t.className = "on" + (err ? " err" : "");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "", err ? 4200 : 2200);
+}
+function fail(e) {
+  console.error(e);
+  if (e && e.code === "permission-denied") toast("Action non autorisée : réservée à l'admin", true);
+  else toast("Erreur : " + (e && e.message ? e.message : e), true);
+}
+function staffName() { return localStorage.getItem("cheerz_staff") || ""; }
+function staffSelect(id) {
+  const cur = staffName(), custom = cur && !STAFF.includes(cur);
+  return `<select id="${id}">${STAFF.map(s => `<option ${s===cur?"selected":""}>${esc(s)}</option>`).join("")}${custom ? `<option selected value="${esc(cur)}">${esc(cur)}</option>` : ""}<option value="__autre">Autre…</option></select>`;
+}
+function readStaff(id) {
+  let v = $(id).value;
+  if (v === "__autre") v = (prompt("Ton prénom :") || "").trim() || "Staff";
+  localStorage.setItem("cheerz_staff", v); return v;
+}
+
+/* ============================================================
+   6. Modal
+   ============================================================ */
+function openModal(html) { $("modal").innerHTML = html; $("overlay").classList.add("on"); const f = $("modal").querySelector("input:not([type=checkbox]),select"); if (f) setTimeout(()=>f.focus(),50); }
+function closeModal() { $("overlay").classList.remove("on"); $("modal").innerHTML = ""; }
+$("overlay").addEventListener("click", e => { if (e.target === $("overlay")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+/* ============================================================
+   7. Auth
+   ============================================================ */
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    try { await signInAnonymously(auth); }
+    catch (e) { setStatus(false, "connexion refusée"); toast("Active « Anonyme » dans Firebase → Authentication → Sign-in method", true); console.error(e); }
+    return;
+  }
+  S.user = user;
+  S.isAdmin = !user.isAnonymous && (user.email||"").toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const b = $("adminBtn"); b.textContent = S.isAdmin ? "Admin ✓" : "Admin"; b.classList.toggle("is-admin", S.isAdmin);
+  startListeners();
+  renderAll();
+});
+
+$("adminBtn").addEventListener("click", () => {
+  if (S.isAdmin) {
+    openModal(`<h2>Session admin</h2><p class="note">Connectée en tant que ${esc(S.user.email)}.</p>
+      <div class="foot"><button class="ghost" data-action="close">Rester connectée</button><button class="danger" data-action="logout">Se déconnecter</button></div>`);
+    return;
+  }
+  openModal(`<h2>Connexion admin</h2>
+    <form id="loginForm">
+      <div class="field"><label>Email</label><input type="email" id="lEmail" value="${esc(ADMIN_EMAIL)}" autocomplete="username"></div>
+      <div class="field"><label>Mot de passe</label><input type="password" id="lPass" autocomplete="current-password"></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="gold">Se connecter</button></div>
+    </form>`);
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { await signInWithEmailAndPassword(auth, $("lEmail").value.trim(), $("lPass").value); closeModal(); toast("Mode admin activé"); }
+    catch (err) { toast("Email ou mot de passe incorrect", true); }
+  });
+});
+
+/* ============================================================
+   8. Listeners temps réel
+   ============================================================ */
+function setStatus(ok, txt) { $("dot").className = "dot " + (ok ? "on" : "off"); $("statusText").textContent = txt; }
+
+function startListeners() {
+  S.unsubs.forEach(u => u()); S.unsubs = [];
+  S.listenersDay = todayStr();
+  const since = Timestamp.fromMillis(Date.now() - JOURS_JOURNAL*86400000);
+  const onErr = e => { setStatus(false, "hors ligne / erreur"); fail(e); };
+
+  S.unsubs.push(onSnapshot(query(collection(db,"sessions"), where("debut",">=",since)), snap => {
+    S.sessions = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    setStatus(true, snap.metadata.fromCache ? "données locales" : "en direct");
+    renderAll();
+  }, onErr));
+
+  S.unsubs.push(onSnapshot(query(collection(db,"reservations"), where("jour",">=",todayStr())), snap => {
+    S.resas = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    renderAll();
+  }, onErr));
+
+  S.unsubs.push(onSnapshot(collection(db,"joueurs"), snap => {
+    S.joueurs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    $("joueursDL").innerHTML = S.joueurs.map(j => `<option value="${esc(j.nom)}">${esc(j.contact||"")}</option>`).join("");
+    renderJoueurs();
+  }, onErr));
+}
+window.addEventListener("online",  () => $("statusText").textContent = "reconnexion…");
+window.addEventListener("offline", () => setStatus(false, "hors ligne"));
+
+/* ============================================================
+   9. Rendu
+   ============================================================ */
+function renderAll() { renderTables(); renderResas(); renderJournal(); }
+
+function enCours(t) { return S.sessions.find(s => s.statut === "en_cours" && Number(s.table) === t); }
+function prochaineResa(t) {
+  const now = Date.now(), today = todayStr();
+  return S.resas
+    .filter(r => Number(r.table) === t && r.statut === "a_venir" && r.jour === today && hmToMs(r.jour, r.heure) > now - 45*60000)
+    .sort((a,b) => a.heure.localeCompare(b.heure))[0];
+}
+
+function renderTables() {
+  const g = $("grid"); let html = "";
+  for (let t = 1; t <= NB_TABLES; t++) {
+    const s = enCours(t), r = prochaineResa(t);
+    let resaHtml = "";
+    if (r) {
+      const diff = (hmToMs(r.jour, r.heure) - Date.now()) / 60000;
+      const cls = diff < 0 ? "late" : (diff <= 45 ? "warn" : "");
+      const when = diff < 0 ? `attendu depuis ${fmtDur(-diff)}` : (diff <= 45 ? `dans ${fmtDur(diff)}` : "");
+      resaHtml = `<div class="t-resa ${cls}">Réservée ${r.heure} · ${esc(r.nom)} ${when ? "<small>— "+when+"</small>" : ""}</div>`;
+    }
+    if (s) {
+      const debut = tsMs(s.debut);
+      html += `<article class="table occ" data-debut="${debut}" data-achat="${s.achat||0}" data-offert="${s.offert?1:0}">
+        <div class="t-head"><span class="t-num">Table ${t}</span><span class="t-state">en jeu depuis ${fmtTime(debut)}</span></div>
+        <div class="t-player">${esc(s.nom)}<small>${esc(s.contact||"")}</small></div>
+        <div class="t-timer" data-timer>${fmtClock(Date.now()-debut)}</div>
+        <div class="t-meta"><span>${s.achat ? "achat " + fmtAr(s.achat) : "pas d'achat"}</span><span>${s.offert ? "30 min offertes" : ""}</span></div>
+        <div class="t-due"><b data-montant>${fmtAr(calcTarif(debut, Date.now(), s.achat, s.offert).montant)}</b><small>à payer si arrêt maintenant</small></div>
+        ${resaHtml}
+        <div class="actions"><button class="ghost" data-action="ajuster-achat" data-id="${s.id}">Achat</button><button class="primary" data-action="terminer" data-id="${s.id}">Terminer</button></div>
+      </article>`;
+    } else {
+      html += `<article class="table libre">
+        <div class="t-head"><span class="t-num">Table ${t}</span><span class="t-state">libre</span></div>
+        <div class="t-timer idle">--:--:--</div>
+        ${resaHtml}
+        <div class="actions">${r ? `<button class="ghost" data-action="arrivee" data-id="${r.id}">Client arrivé</button>` : ""}<button class="primary" data-action="demarrer" data-t="${t}">Démarrer une partie</button></div>
+      </article>`;
+    }
+  }
+  g.innerHTML = html;
+}
+
+function tick() {
+  if (todayStr() !== S.listenersDay && S.user) { startListeners(); }
+  if (new Date().getSeconds() === 0 && !$("overlay").classList.contains("on")) renderTables();
+  document.querySelectorAll(".table.occ").forEach(card => {
+    const debut = Number(card.dataset.debut), now = Date.now();
+    card.querySelector("[data-timer]").textContent = fmtClock(now - debut);
+    card.querySelector("[data-montant]").textContent = fmtAr(calcTarif(debut, now, Number(card.dataset.achat), card.dataset.offert === "1").montant);
+  });
+}
+setInterval(tick, 1000);
+
+function renderResas() {
+  const showOld = $("resaShowOld").checked;
+  const list = S.resas.filter(r => showOld || r.statut === "a_venir").sort((a,b) => (a.jour+a.heure).localeCompare(b.jour+b.heure));
+  $("nResa").textContent = S.resas.filter(r => r.statut === "a_venir").length;
+  if (!list.length) { $("resaList").innerHTML = `<div class="card empty">Aucune réservation à venir. Ajoute-en une avec le bouton ci-dessus.</div>`; return; }
+  let html = "", day = null;
+  for (const r of list) {
+    if (r.jour !== day) { day = r.jour; html += `<div class="day-h">${day === todayStr() ? "Aujourd'hui" : esc(fmtDateLong(day))}</div><div class="card">`; }
+    const tag = r.statut === "annulee" ? `<span class="tag cancel">annulée</span>` : r.statut === "arrivee" ? `<span class="tag done">arrivé</span>` : "";
+    html += `<div class="line">
+      <div class="when">${esc(r.heure)}<small>${fmtDur(r.duree)}</small></div>
+      <div class="who"><b>${esc(r.nom)}<span class="tag t">T${r.table}</span>${tag}</b><small>${esc(r.contact||"")}${r.par ? " · par " + esc(r.par) : ""}</small></div>
+      <div class="ops">
+        ${r.statut === "a_venir" ? `<button class="sm ghost" data-action="annuler-resa" data-id="${r.id}">Annuler</button>` : ""}
+        ${S.isAdmin ? `<button class="sm ghost" data-action="edit-resa" data-id="${r.id}">✎</button><button class="sm danger" data-action="del-resa" data-id="${r.id}">✕</button>` : ""}
+      </div></div>`;
+    const next = list[list.indexOf(r)+1];
+    if (!next || next.jour !== day) html += `</div>`;
+  }
+  $("resaList").innerHTML = html;
+}
+
+function renderJournal() {
+  const all = $("jAll").checked, day = $("jDate").value || todayStr();
+  const list = S.sessions
+    .filter(s => all || todayStr(new Date(tsMs(s.debut))) === day)
+    .sort((a,b) => tsMs(b.debut) - tsMs(a.debut));
+  let tot = 0, mins = 0;
+  for (const s of list) {
+    if (s.statut === "terminee") { tot += Number(s.montant||0); mins += Number(s.duree_min||0); }
+    else mins += (Date.now() - tsMs(s.debut)) / 60000;
+  }
+  $("kSessions").textContent = list.length; $("kMinutes").textContent = fmtDur(mins); $("kTotal").textContent = fmtAr(tot);
+  if (!list.length) { $("journalList").innerHTML = `<div class="empty">Aucune partie ${all ? "sur 60 jours" : "ce jour-là"}.</div>`; return; }
+  $("journalList").innerHTML = list.map(s => {
+    const d = tsMs(s.debut), f = tsMs(s.fin);
+    const live = s.statut === "en_cours";
+    return `<div class="line">
+      <div class="when">${fmtTime(d)} – ${live ? "…" : fmtTime(f)}<small>${all ? esc(fmtDateLong(todayStr(new Date(d)))) : fmtDur(live ? (Date.now()-d)/60000 : s.duree_min)}</small></div>
+      <div class="who"><b>${esc(s.nom)}<span class="tag t">T${s.table}</span>${live ? `<span class="tag live">en cours</span>` : ""}${s.offert ? `<span class="tag off">30 min off.</span>` : ""}</b>
+        <small>${esc(s.contact||"")}${s.achat ? " · achat " + fmtAr(s.achat) : ""}${s.par ? " · " + esc(s.par) : ""}${s.note ? " · " + esc(s.note) : ""}</small></div>
+      <div class="amt">${live ? "—" : fmtAr(s.montant)}</div>
+      ${S.isAdmin ? `<div class="ops"><button class="sm ghost" data-action="edit-session" data-id="${s.id}">✎</button><button class="sm danger" data-action="del-session" data-id="${s.id}">✕</button></div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function renderJoueurs() {
+  const q = $("jSearch").value.trim().toLowerCase(), qd = q.replace(/\D/g,"");
+  const list = S.joueurs
+    .filter(j => !q || (j.nom||"").toLowerCase().includes(q) || (qd && normContact(j.contact).includes(qd)))
+    .sort((a,b) => (tsMs(b.derniere)||0) - (tsMs(a.derniere)||0));
+  if (!list.length) { $("joueursList").innerHTML = `<div class="empty">${q ? "Aucun joueur ne correspond." : "Les joueurs s'ajoutent automatiquement à chaque partie ou réservation."}</div>`; return; }
+  $("joueursList").innerHTML = list.map(j => `<div class="line">
+    <div class="who"><b>${esc(j.nom)}</b><small>${esc(j.contact||"—")} · ${j.visites||0} visite${(j.visites||0)>1?"s":""}${j.derniere ? " · dernière le " + new Date(tsMs(j.derniere)).toLocaleDateString("fr-FR") : ""}</small></div>
+    ${j.contact ? `<a href="tel:${esc(normContact(j.contact))}" class="sm ghost" style="text-decoration:none;padding:7px 11px;border:1px solid var(--line);border-radius:7px;font-size:14px">Appeler</a>` : ""}
+    ${S.isAdmin ? `<div class="ops"><button class="sm ghost" data-action="edit-joueur" data-id="${j.id}">✎</button><button class="sm danger" data-action="del-joueur" data-id="${j.id}">✕</button></div>` : ""}
+  </div>`).join("");
+}
+
+/* ============================================================
+   10. Actions
+   ============================================================ */
+async function upsertJoueur(nom, contact) {
+  nom = String(nom||"").trim(); if (!nom) return;
+  const id = joueurId(nom, contact), ref = doc(db,"joueurs",id);
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) await updateDoc(ref, { nom, contact: contact || snap.data().contact || "", visites: (snap.data().visites||0)+1, derniere: Timestamp.now() });
+    else await setDoc(ref, { nom, contact: contact||"", visites: 1, derniere: Timestamp.now(), creeLe: Timestamp.now() });
+  } catch (e) { console.warn("joueur non enregistré", e); }
+}
+function fillContactFromName(nomId, contactId) {
+  $(nomId).addEventListener("change", () => {
+    const j = S.joueurs.find(x => (x.nom||"").toLowerCase() === $(nomId).value.trim().toLowerCase());
+    if (j && j.contact && !$(contactId).value) $(contactId).value = j.contact;
+  });
+}
+function bindOffreAuto(achatId, offertId) {
+  $(achatId).addEventListener("input", () => { $(offertId).checked = Number($(achatId).value||0) >= SEUIL_OFFRE; });
+}
+
+function modalDemarrer(t, resa) {
+  const r = resa || prochaineResa(t);
+  const warn = (!resa && r) ? `<div class="warnbox">Cette table est réservée à ${esc(r.heure)} pour ${esc(r.nom)}. Si c'est cette personne, utilise plutôt « Client arrivé ».</div>` : "";
+  openModal(`<h2>Table ${t} — démarrer</h2>${warn}
+    <form id="f">
+      <div class="field"><label>Nom du joueur</label><input id="nom" list="joueursDL" required value="${esc(r && resa ? r.nom : "")}" autocomplete="off"></div>
+      <div class="field"><label>Contact (téléphone)</label><input id="contact" type="tel" value="${esc(r && resa ? (r.contact||"") : "")}"></div>
+      <div class="row">
+        <div class="field"><label>Heure de début</label><input id="heure" type="time" value="${nowHM()}" required></div>
+        <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="0" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert"> 30 min offertes (auto si achat ≥ ${SEUIL_OFFRE.toLocaleString("fr-FR")} Ar)</label></div>
+      <div class="field"><label>Saisi par</label>${staffSelect("par")}</div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Démarrer</button></div>
+    </form>`);
+  fillContactFromName("nom","contact"); bindOffreAuto("achat","offert");
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (enCours(t)) { toast("La table " + t + " est déjà occupée", true); return; }
+    const nom = $("nom").value.trim(), contact = $("contact").value.trim(), achat = Number($("achat").value||0), offert = $("offert").checked;
+    let debut = hmToMs(todayStr(), $("heure").value); if (debut > Date.now() + 60000) debut = Date.now();
+    const par = readStaff("par");
+    try {
+      const ref = await addDoc(collection(db,"sessions"), { table: t, nom, contact, debut: Timestamp.fromMillis(debut), fin: null, achat, offert, montant: null, statut: "en_cours", par, creeLe: Timestamp.now(), resaId: resa ? resa.id : null });
+      if (resa) await updateDoc(doc(db,"reservations",resa.id), { statut: "arrivee", sessionId: ref.id });
+      closeModal(); toast("Table " + t + " démarrée pour " + nom);
+      upsertJoueur(nom, contact);
+    } catch (err) { fail(err); }
+  });
+}
+
+function modalTerminer(id) {
+  const s = S.sessions.find(x => x.id === id); if (!s) return;
+  const debut = tsMs(s.debut);
+  openModal(`<h2>Table ${s.table} — terminer</h2>
+    <p class="note">${esc(s.nom)} · début ${fmtTime(debut)}</p>
+    <div class="recap">
+      <span class="k">Temps joué</span><span id="rDur"></span>
+      <span class="k">Tranches de 30 min</span><span id="rBlocs"></span>
+      <span class="k">À encaisser</span><span class="big" id="rMontant"></span>
+    </div>
+    <form id="f">
+      <div class="row">
+        <div class="field"><label>Heure de fin</label><input id="fin" type="time" value="${nowHM()}" required></div>
+        <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      <div class="field"><label>Clôturé par</label>${staffSelect("par")}</div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Encaisser et libérer</button></div>
+    </form>`);
+  const recalc = () => {
+    let fin = hmToMs(todayStr(), $("fin").value); if (fin < debut) fin += 86400000;
+    const c = calcTarif(debut, fin, Number($("achat").value||0), $("offert").checked);
+    $("rDur").textContent = fmtDur(c.minutes); $("rBlocs").textContent = c.blocs + (c.blocsFactures !== c.blocs ? ` (−1 offerte = ${c.blocsFactures})` : ""); $("rMontant").textContent = fmtAr(c.montant);
+    return { fin, c };
+  };
+  bindOffreAuto("achat","offert");
+  ["fin","achat","offert"].forEach(i => $(i).addEventListener("input", recalc));
+  recalc();
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const { fin, c } = recalc(); const par = readStaff("par");
+    try {
+      await updateDoc(doc(db,"sessions",id), { fin: Timestamp.fromMillis(fin), statut: "terminee", achat: Number($("achat").value||0), offert: $("offert").checked, blocs: c.blocs, duree_min: Math.round(c.minutes), montant: c.montant, cloturePar: par, clotureLe: Timestamp.now() });
+      closeModal(); toast("Table " + s.table + " libérée · " + fmtAr(c.montant));
+    } catch (err) { fail(err); }
+  });
+}
+
+function modalAchat(id) {
+  const s = S.sessions.find(x => x.id === id); if (!s) return;
+  openModal(`<h2>Achat — ${esc(s.nom)}</h2><p class="note">Le montant des consommations, pour déclencher les 30 min offertes.</p>
+    <form id="f">
+      <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}" inputmode="numeric"></div>
+      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Enregistrer</button></div>
+    </form>`);
+  bindOffreAuto("achat","offert");
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { await updateDoc(doc(db,"sessions",id), { achat: Number($("achat").value||0), offert: $("offert").checked }); closeModal(); toast("Achat enregistré"); }
+    catch (err) { fail(err); }
+  });
+}
+
+function modalResa(existing) {
+  const r = existing || { table: 1, nom: "", contact: "", jour: todayStr(), heure: "", duree: 60 };
+  openModal(`<h2>${existing ? "Modifier la réservation" : "Nouvelle réservation"}</h2>
+    <form id="f">
+      <div class="field"><label>Nom</label><input id="nom" list="joueursDL" required value="${esc(r.nom)}" autocomplete="off"></div>
+      <div class="field"><label>Contact (téléphone)</label><input id="contact" type="tel" value="${esc(r.contact||"")}"></div>
+      <div class="row">
+        <div class="field"><label>Table</label><select id="table">${Array.from({length:NB_TABLES},(_,i)=>`<option value="${i+1}" ${Number(r.table)===i+1?"selected":""}>Table ${i+1}</option>`).join("")}</select></div>
+        <div class="field"><label>Durée</label><select id="duree">${DUREES_RESA.map(d=>`<option value="${d}" ${Number(r.duree)===d?"selected":""}>${fmtDur(d)}</option>`).join("")}</select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Jour</label><input id="jour" type="date" required value="${r.jour}" min="${todayStr()}"></div>
+        <div class="field"><label>Heure</label><input id="heure" type="time" required value="${esc(r.heure)}"></div>
+      </div>
+      ${existing ? "" : `<div class="field"><label>Saisi par</label>${staffSelect("par")}</div>`}
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">${existing ? "Enregistrer" : "Réserver"}</button></div>
+    </form>`);
+  fillContactFromName("nom","contact");
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const data = { table: Number($("table").value), nom: $("nom").value.trim(), contact: $("contact").value.trim(), jour: $("jour").value, heure: $("heure").value, duree: Number($("duree").value) };
+    const start = hmToMs(data.jour, data.heure), end = start + data.duree*60000;
+    const clash = S.resas.find(x => x.id !== (existing&&existing.id) && Number(x.table) === data.table && x.jour === data.jour && x.statut === "a_venir" && start < hmToMs(x.jour,x.heure) + Number(x.duree)*60000 && end > hmToMs(x.jour,x.heure));
+    if (clash) { toast(`Conflit : table ${data.table} déjà réservée à ${clash.heure} (${clash.nom})`, true); return; }
+    try {
+      if (existing) await updateDoc(doc(db,"reservations",existing.id), data);
+      else await addDoc(collection(db,"reservations"), { ...data, statut: "a_venir", par: readStaff("par"), creeLe: Timestamp.now() });
+      closeModal(); toast(existing ? "Réservation modifiée" : "Réservation enregistrée");
+      if (!existing) upsertJoueur(data.nom, data.contact);
+    } catch (err) { fail(err); }
+  });
+}
+
+function modalEditSession(id) {
+  const s = S.sessions.find(x => x.id === id); if (!s) return;
+  const d = tsMs(s.debut), f = tsMs(s.fin) || Date.now();
+  openModal(`<h2>Modifier la partie</h2>
+    <form id="f">
+      <div class="row">
+        <div class="field"><label>Nom</label><input id="nom" required value="${esc(s.nom)}"></div>
+        <div class="field"><label>Contact</label><input id="contact" value="${esc(s.contact||"")}"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Table</label><select id="table">${Array.from({length:NB_TABLES},(_,i)=>`<option value="${i+1}" ${Number(s.table)===i+1?"selected":""}>Table ${i+1}</option>`).join("")}</select></div>
+        <div class="field"><label>Statut</label><select id="statut"><option value="terminee" ${s.statut==="terminee"?"selected":""}>terminée</option><option value="en_cours" ${s.statut==="en_cours"?"selected":""}>en cours</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Début</label><input id="debut" type="datetime-local" required value="${toLocalInput(d)}"></div>
+        <div class="field"><label>Fin</label><input id="fin" type="datetime-local" value="${toLocalInput(f)}"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Achat (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}"></div>
+        <div class="field"><label>Montant encaissé (Ar)</label><input id="montant" type="number" min="0" step="500" value="${s.montant??""}"></div>
+      </div>
+      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      <div class="field"><button type="button" class="ghost sm" id="recalc">Recalculer le montant selon le tarif</button></div>
+      <div class="field"><label>Note</label><input id="note" value="${esc(s.note||"")}" placeholder="ex. correction heure oubliée"></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="gold">Enregistrer</button></div>
+    </form>`);
+  $("recalc").addEventListener("click", () => {
+    const c = calcTarif(new Date($("debut").value).getTime(), new Date($("fin").value).getTime(), Number($("achat").value||0), $("offert").checked);
+    $("montant").value = c.montant; toast(`${fmtDur(c.minutes)} → ${c.blocs} tranche(s) → ${fmtAr(c.montant)}`);
+  });
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const statut = $("statut").value, debut = new Date($("debut").value).getTime();
+    const fin = statut === "terminee" && $("fin").value ? new Date($("fin").value).getTime() : null;
+    const data = { nom: $("nom").value.trim(), contact: $("contact").value.trim(), table: Number($("table").value), statut, debut: Timestamp.fromMillis(debut), fin: fin ? Timestamp.fromMillis(fin) : null, achat: Number($("achat").value||0), offert: $("offert").checked, montant: statut === "terminee" ? Number($("montant").value||0) : null, note: $("note").value.trim(), modifieLe: Timestamp.now() };
+    if (fin) { data.duree_min = Math.round((fin - debut)/60000); data.blocs = calcTarif(debut, fin, data.achat, data.offert).blocs; }
+    try { await updateDoc(doc(db,"sessions",id), data); closeModal(); toast("Partie modifiée"); } catch (err) { fail(err); }
+  });
+}
+
+function modalEditJoueur(id) {
+  const j = S.joueurs.find(x => x.id === id); if (!j) return;
+  openModal(`<h2>Modifier le joueur</h2>
+    <form id="f">
+      <div class="field"><label>Nom</label><input id="nom" required value="${esc(j.nom)}"></div>
+      <div class="field"><label>Contact</label><input id="contact" value="${esc(j.contact||"")}"></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="gold">Enregistrer</button></div>
+    </form>`);
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { await updateDoc(doc(db,"joueurs",id), { nom: $("nom").value.trim(), contact: $("contact").value.trim() }); closeModal(); toast("Joueur modifié"); } catch (err) { fail(err); }
+  });
+}
+
+async function confirmDelete(label, fn) {
+  if (!confirm(`Supprimer ${label} ? Cette action est définitive.`)) return;
+  try { await fn(); toast("Supprimé"); } catch (err) { fail(err); }
+}
+
+/* Délégation des clics */
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-action]"); if (!b) return;
+  const a = b.dataset.action, id = b.dataset.id;
+  switch (a) {
+    case "close": closeModal(); break;
+    case "logout": S.unsubs.forEach(u => u()); S.unsubs = []; await signOut(auth); closeModal(); toast("Mode admin désactivé"); break;
+    case "demarrer": modalDemarrer(Number(b.dataset.t)); break;
+    case "arrivee": { const r = S.resas.find(x => x.id === id); if (r) modalDemarrer(Number(r.table), r); break; }
+    case "terminer": modalTerminer(id); break;
+    case "ajuster-achat": modalAchat(id); break;
+    case "new-resa": modalResa(null); break;
+    case "edit-resa": modalResa(S.resas.find(x => x.id === id)); break;
+    case "annuler-resa": { const r = S.resas.find(x => x.id === id); if (r && confirm(`Annuler la réservation de ${r.nom} à ${r.heure} ?`)) { try { await updateDoc(doc(db,"reservations",id), { statut: "annulee" }); toast("Réservation annulée"); } catch (err) { fail(err); } } break; }
+    case "del-resa": confirmDelete("cette réservation", () => deleteDoc(doc(db,"reservations",id))); break;
+    case "edit-session": modalEditSession(id); break;
+    case "del-session": confirmDelete("cette partie du journal", () => deleteDoc(doc(db,"sessions",id))); break;
+    case "edit-joueur": modalEditJoueur(id); break;
+    case "del-joueur": confirmDelete("ce joueur", () => deleteDoc(doc(db,"joueurs",id))); break;
+  }
+});
+
+/* Onglets et filtres */
+$("tabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tab]"); if (!b) return;
+  S.tab = b.dataset.tab;
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("main section").forEach(sec => sec.classList.toggle("on", sec.id === "tab-" + S.tab));
+});
+$("jDate").value = todayStr();
+$("jDate").addEventListener("change", renderJournal);
+$("jAll").addEventListener("change", renderJournal);
+$("jToday").addEventListener("click", () => { $("jDate").value = todayStr(); $("jAll").checked = false; renderJournal(); });
+$("resaShowOld").addEventListener("change", renderResas);
+$("jSearch").addEventListener("input", renderJoueurs);
+$("jCsv").addEventListener("click", () => {
+  const all = $("jAll").checked, day = $("jDate").value || todayStr();
+  const rows = S.sessions.filter(s => all || todayStr(new Date(tsMs(s.debut))) === day).sort((a,b) => tsMs(a.debut) - tsMs(b.debut));
+  const head = ["date","debut","fin","table","nom","contact","duree_min","tranches","offert","achat_ar","montant_ar","saisi_par","cloture_par","note"];
+  const csv = [head.join(";")].concat(rows.map(s => {
+    const d = tsMs(s.debut), f = tsMs(s.fin);
+    return [todayStr(new Date(d)), fmtTime(d), f ? fmtTime(f) : "", s.table, s.nom, s.contact||"", s.duree_min||"", s.blocs||"", s.offert ? "oui" : "non", s.achat||0, s.montant??"", s.par||"", s.cloturePar||"", s.note||""]
+      .map(v => `"${String(v).replace(/"/g,'""')}"`).join(";");
+  })).join("\n");
+  const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `billard_${all ? "60j" : day}.csv`; a.click();
+});
+renderTables();
+</script>
+</body>
+</html>
