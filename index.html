@@ -80,6 +80,34 @@
   .table .actions button{flex:1}
   .occ .actions .primary{background:#fff;color:var(--felt-deep)}
 
+  /* encaissement */
+  .pay{display:flex;gap:8px;margin-bottom:14px}
+  .pay button{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--muted);font-size:14px;padding:10px 6px}
+  .pay button.on{background:var(--felt);border-color:var(--felt);color:#fff}
+  .rendu{background:var(--bg);border-radius:var(--r-sm);padding:14px;margin-bottom:14px;text-align:center}
+  .rendu b{display:block;font-family:"Barlow Semi Condensed",sans-serif;font-size:34px;color:#8FE3B4;font-variant-numeric:tabular-nums;line-height:1.1}
+  .rendu.miss b{color:var(--red)}
+  .rendu span{font-size:14px;color:var(--muted)}
+  .billets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .billets button{flex:1 1 30%;font-size:14px;padding:9px 4px;background:var(--surface2)}
+  .kpis2{display:flex;gap:8px;flex-wrap:wrap;margin:-6px 0 12px;font-size:14px;color:var(--muted)}
+  .kpis2 b{color:var(--cream);font-variant-numeric:tabular-nums}
+
+  /* compte à rebours + alertes */
+  .t-timer.soon{color:#FFE0A3}
+  .t-timer.over{color:#FFC2BF;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .t-sub{font-size:14px;color:#CFE9DA;margin-top:-4px}
+  .table.over{background:linear-gradient(160deg,#7E2E2B 0%,#4E1B19 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 14px 40px -20px rgba(217,83,79,.5)}
+  .alerts{margin-bottom:12px}
+  .alert{display:flex;align-items:center;gap:10px;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;font-weight:600}
+  .alert span{flex:1}
+  .alert button{background:rgba(0,0,0,.25);color:#fff;padding:7px 12px;font-size:14px}
+  .soundbtn{font-size:16px;padding:8px 10px;background:transparent;border:1px solid var(--line)}
+  .soundbtn.on{border-color:var(--gold);color:var(--gold)}
+  .prolong{display:flex;gap:8px;margin-top:2px}
+  .prolong button{flex:1;background:rgba(255,255,255,.12);color:#fff;font-size:14px;padding:9px}
+
   /* disponibilités */
   .dispo{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
   .dispo h3{margin:0 0 8px;font-family:"Barlow Semi Condensed",sans-serif;font-size:17px;font-weight:700}
@@ -144,9 +172,11 @@
 </head>
 <body>
 
+
 <header class="top">
   <div class="brand">Cheerz <span>billard</span></div>
   <div class="status"><span class="dot" id="dot"></span><span id="statusText">connexion…</span></div>
+  <button class="soundbtn" id="soundBtn" title="Activer le son des alertes">🔔</button>
   <button class="adminbtn" id="adminBtn">Admin</button>
 </header>
 
@@ -159,6 +189,7 @@
 
 <main>
   <section id="tab-tables" class="on">
+    <div class="alerts" id="alerts"></div>
     <div class="dispo" id="dispo"></div>
     <div class="grid" id="grid"></div>
   </section>
@@ -178,6 +209,7 @@
       <button class="ghost sm" id="jToday">Aujourd'hui</button>
       <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="jAll" style="transform:none"> 60 derniers jours</label>
       <span class="spacer"></span>
+      <button class="ghost sm" id="jRecap">📤 Récap du jour</button>
       <button class="ghost sm" id="jCsv">Exporter CSV</button>
     </div>
     <div class="kpis">
@@ -185,6 +217,7 @@
       <div class="kpi"><b id="kMinutes">0h</b><span>temps joué</span></div>
       <div class="kpi"><b id="kTotal">0 Ar</b><span>encaissé billard</span></div>
     </div>
+    <div class="kpis2" id="kModes"></div>
     <div class="card" id="journalList"></div>
   </section>
 
@@ -211,18 +244,20 @@ const firebaseConfig = {
   storageBucket: "cheerz-billard.firebasestorage.app",
   messagingSenderId: "378623269440",
   appId: "1:378623269440:web:1cffc08a0550f339cf5da5"
-};
+}
 const ADMIN_EMAIL = "mikaela.mamitiana@gmail.com";   // même email que dans les règles Firestore
 
 /* Réglages métier */
 const NB_TABLES     = 4;
 const PRIX_BLOC     = 3000;    // Ar par tranche de 30 min (=> 6000 Ar / heure)
 const BLOC_MIN      = 30;
-const TOLERANCE_MIN = 3;       // 33 min = 1 bloc, 34 min = 2 blocs
+const TOLERANCE_MIN = 5;       // marge avant de facturer la tranche suivante (35 min = 1 bloc)
 const SEUIL_OFFRE   = 10000;   // achat >= ce montant => 30 min offertes
 const STAFF = ["Sisih","Patrick","Tommy","Haja","Satchio","Mikaela"];
-const DUREES_RESA = [30,60,90,120,180,240,300,360];
-const DUREES_PREVUES = [0,30,60,90,120,180,240,300,360];   // 0 = non précisée
+const DUREES_RESA    = [30,60,90,120,150,180,210,240,270,300,330,360];
+const DUREES_PREVUES = [0,30,60,90,120,150,180,210,240,270,300,330,360];   // 0 = non précisée
+const ALERTE_AVANT   = 5;      // premier bip X minutes avant la fin
+const MODES_PAIEMENT = ["Espèces","MVola","Orange Money","Mixte"];
 const JOURS_JOURNAL = 60;
 
 /* ============================================================
@@ -296,6 +331,34 @@ function calcTarif(debutMs, finMs, achat, offert) {
   const blocsFactures = Math.max(0, blocs - (offert ? 1 : 0));
   return { minutes, blocs, blocsFactures, montant: blocsFactures * PRIX_BLOC };
 }
+
+/* ---- son des alertes ---- */
+let audioCtx = null;
+function beep(times = 1) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    for (let i = 0; i < times; i++) {
+      const t = audioCtx.currentTime + i * 0.45;
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(i % 2 ? 660 : 880, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.42);
+    }
+  } catch (e) { console.warn("son indisponible", e); }
+  try { if (navigator.vibrate) navigator.vibrate(times > 1 ? [250,120,250,120,250] : [200]); } catch (e) {}
+}
+document.addEventListener("click", () => { if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); }, { capture: true });
+$("soundBtn").addEventListener("click", () => {
+  beep(1);
+  $("soundBtn").classList.add("on");
+  toast("Son des alertes activé sur ce téléphone");
+});
+
+/* ---- suivi des fins de partie ---- */
+const AL = {};   // sessionId -> { prev, warned, fired, acked, lastBeep }
 
 function toast(msg, err=false) {
   const t = $("toast"); t.textContent = msg; t.className = "on" + (err ? " err" : "");
@@ -415,6 +478,19 @@ function etatTable(t) {
   if (diff > 0) return { libre: false, txt: `libre vers ${fmtTime(fin)}`, sub: `dans ${fmtDur(diff)}` + (resaTxt ? " · " + resaTxt : ""), fin };
   return { libre: false, txt: `devait finir à ${fmtTime(fin)}`, sub: `dépassé de ${fmtDur(-diff)}` + (resaTxt ? " · " + resaTxt : ""), fin, over: true };
 }
+function renderAlerts() {
+  let html = "";
+  for (let t = 1; t <= NB_TABLES; t++) {
+    const s = enCours(t); if (!s) continue;
+    const prevu = Number(s.duree_prevue || 0); if (!prevu) continue;
+    const a = AL[s.id]; if (!a || !a.fired || a.acked) continue;
+    const depasse = (Date.now() - (tsMs(s.debut) + prevu * 60000)) / 60000;
+    html += `<div class="alert">⏰<span>Table ${t} — ${esc(s.nom)} : temps terminé${depasse >= 1 ? ` (dépassé de ${fmtDur(depasse)})` : ""}</span>
+      <button data-action="ack" data-id="${s.id}">OK</button></div>`;
+  }
+  $("alerts").innerHTML = html;
+}
+
 function renderDispo() {
   let html = `<h3>Disponibilités</h3>`;
   for (let t = 1; t <= NB_TABLES; t++) { const e = etatTable(t); html += `<div class="d ${e.libre?"free":""}"><b>T${t}</b><span>${e.txt}${e.sub ? ` <small>· ${e.sub}</small>` : ""}</span></div>`; }
@@ -435,14 +511,16 @@ function renderTables() {
     }
     if (s) {
       const debut = tsMs(s.debut);
-      html += `<article class="table occ" data-debut="${debut}" data-achat="${s.achat||0}" data-offert="${s.offert?1:0}">
+      html += `<article class="table occ" data-id="${s.id}" data-debut="${debut}" data-achat="${s.achat||0}" data-offert="${s.offert?1:0}" data-prevu="${Number(s.duree_prevue||0)}" data-nom="${esc(s.nom)}" data-t="${t}">
         <div class="t-head"><span class="t-num">Table ${t}</span><span class="t-state">en jeu depuis ${fmtTime(debut)}</span></div>
         <div class="t-player">${esc(s.nom)}<small>${esc(s.contact||"")}</small></div>
-        <div class="t-timer" data-timer>${fmtClock(Date.now()-debut)}</div>
+        <div class="t-timer" data-timer></div>
+        <div class="t-sub" data-sub></div>
         <div class="t-meta"><span>${s.achat ? "achat " + fmtAr(s.achat) : "pas d'achat"}</span><span>${s.offert ? "30 min offertes" : ""}</span></div>
         <div class="t-due"><b data-montant>${fmtAr(calcTarif(debut, Date.now(), s.achat, s.offert).montant)}</b><small>à payer si arrêt maintenant</small></div>
         <div class="t-libre ${etatTable(t).over?"over":""}" data-libre>${etatTable(t).txt}${Number(s.duree_prevue) ? " · " + etatTable(t).sub.split(" · ")[0] : ""}</div>
         ${resaHtml}
+        <div class="prolong"><button data-action="prolonger" data-id="${s.id}" data-min="30">+ 30 min</button><button data-action="prolonger" data-id="${s.id}" data-min="60">+ 1 h</button></div>
         <div class="actions"><button class="ghost" data-action="ajuster-achat" data-id="${s.id}">Achat / durée</button><button class="primary" data-action="terminer" data-id="${s.id}">Terminer</button></div>
       </article>`;
     } else {
@@ -460,11 +538,43 @@ function renderTables() {
 function tick() {
   if (todayStr() !== S.listenersDay && S.user) { startListeners(); }
   if (new Date().getSeconds() % 30 === 0 && !$("overlay").classList.contains("on")) renderTables();
+  const now = Date.now();
   document.querySelectorAll(".table.occ").forEach(card => {
-    const debut = Number(card.dataset.debut), now = Date.now();
-    card.querySelector("[data-timer]").textContent = fmtClock(now - debut);
-    card.querySelector("[data-montant]").textContent = fmtAr(calcTarif(debut, now, Number(card.dataset.achat), card.dataset.offert === "1").montant);
+    const debut = Number(card.dataset.debut), prevu = Number(card.dataset.prevu || 0);
+    const id = card.dataset.id, timer = card.querySelector("[data-timer]"), sub = card.querySelector("[data-sub]");
+    const ecoule = now - debut;
+
+    card.querySelector("[data-montant]").textContent =
+      fmtAr(calcTarif(debut, now, Number(card.dataset.achat), card.dataset.offert === "1").montant);
+
+    if (!prevu) {
+      timer.textContent = fmtClock(ecoule);
+      timer.className = "t-timer";
+      sub.textContent = "durée non précisée — demander au client";
+      card.classList.remove("over");
+      return;
+    }
+
+    const reste = debut + prevu * 60000 - now;
+    timer.textContent = (reste < 0 ? "+" : "") + fmtClock(Math.abs(reste));
+    timer.className = "t-timer" + (reste <= 0 ? " over" : (reste <= ALERTE_AVANT * 60000 ? " soon" : ""));
+    card.classList.toggle("over", reste <= 0);
+    sub.textContent = reste > 0
+      ? `prévu ${fmtDur(prevu)} · fin vers ${fmtTime(debut + prevu * 60000)} · joué ${fmtClock(ecoule)}`
+      : `temps terminé à ${fmtTime(debut + prevu * 60000)} · joué ${fmtClock(ecoule)}`;
+
+    const a = AL[id] || (AL[id] = { prev: reste, warned: false, fired: false, acked: false, lastBeep: 0 });
+    if (a.prev > ALERTE_AVANT * 60000 && reste <= ALERTE_AVANT * 60000 && reste > 0 && !a.warned) {
+      a.warned = true; beep(1);
+      toast(`Table ${card.dataset.t} : ${ALERTE_AVANT} minutes avant la fin`);
+    }
+    if (a.prev > 0 && reste <= 0 && !a.fired) {
+      a.fired = true; a.acked = false; a.lastBeep = now; beep(3);
+    }
+    if (a.fired && !a.acked && reste <= 0 && now - a.lastBeep > 120000) { a.lastBeep = now; beep(3); }
+    a.prev = reste;
   });
+  renderAlerts();
 }
 setInterval(tick, 1000);
 
@@ -490,6 +600,23 @@ function renderResas() {
   $("resaList").innerHTML = html;
 }
 
+/* répartition réelle Espèces / MVola / Orange, mixte compris */
+function repartition(list) {
+  const r = { "Espèces": 0, "MVola": 0, "Orange Money": 0 };
+  for (const s of list) {
+    if (s.statut !== "terminee") continue;
+    if (s.pay_especes != null || s.pay_mvola != null || s.pay_orange != null) {
+      r["Espèces"] += Number(s.pay_especes || 0);
+      r["MVola"] += Number(s.pay_mvola || 0);
+      r["Orange Money"] += Number(s.pay_orange || 0);
+    } else {
+      const m = MODES_PAIEMENT.includes(s.mode_paiement) && s.mode_paiement !== "Mixte" ? s.mode_paiement : "Espèces";
+      r[m] += Number(s.montant || 0);
+    }
+  }
+  return r;
+}
+
 function renderJournal() {
   const all = $("jAll").checked, day = $("jDate").value || todayStr();
   const list = S.sessions
@@ -500,7 +627,10 @@ function renderJournal() {
     if (s.statut === "terminee") { tot += Number(s.montant||0); mins += Number(s.duree_min||0); }
     else mins += (Date.now() - tsMs(s.debut)) / 60000;
   }
+  const parMode = repartition(list);
   $("kSessions").textContent = list.length; $("kMinutes").textContent = fmtDur(mins); $("kTotal").textContent = fmtAr(tot);
+  $("kModes").innerHTML = Object.keys(parMode).filter(m => parMode[m]).map(m => `<span>${m} : <b>${fmtAr(parMode[m])}</b></span>`).join("")
+    || `<span>Aucun encaissement enregistré.</span>`;
   if (!list.length) { $("journalList").innerHTML = `<div class="empty">Aucune partie ${all ? "sur 60 jours" : "ce jour-là"}.</div>`; return; }
   $("journalList").innerHTML = list.map(s => {
     const d = tsMs(s.debut), f = tsMs(s.fin);
@@ -508,7 +638,7 @@ function renderJournal() {
     return `<div class="line">
       <div class="when">${fmtTime(d)} – ${live ? "…" : fmtTime(f)}<small>${all ? esc(fmtDateLong(todayStr(new Date(d)))) : fmtDur(live ? (Date.now()-d)/60000 : s.duree_min)}</small></div>
       <div class="who"><b>${esc(s.nom)}<span class="tag t">T${s.table}</span>${live ? `<span class="tag live">en cours</span>` : ""}${s.offert ? `<span class="tag off">30 min off.</span>` : ""}</b>
-        <small>${esc(s.contact||"")}${s.achat ? " · achat " + fmtAr(s.achat) : ""}${s.par ? " · " + esc(s.par) : ""}${s.note ? " · " + esc(s.note) : ""}</small></div>
+        <small>${esc(s.contact||"")}${s.mode_paiement ? " · " + esc(s.mode_paiement) : ""}${s.achat ? " · achat " + fmtAr(s.achat) : ""}${s.par ? " · " + esc(s.par) : ""}${s.note ? " · " + esc(s.note) : ""}</small></div>
       <div class="amt">${live ? "—" : fmtAr(s.montant)}</div>
       ${S.isAdmin ? `<div class="ops"><button class="sm ghost" data-action="edit-session" data-id="${s.id}">✎</button><button class="sm danger" data-action="del-session" data-id="${s.id}">✕</button></div>` : ""}
     </div>`;
@@ -603,6 +733,24 @@ function modalTerminer(id) {
         <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}" inputmode="numeric"></div>
       </div>
       <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+
+      <label>Mode de paiement</label>
+      <div class="pay" id="payBox">${MODES_PAIEMENT.map((m,i)=>`<button type="button" data-mode="${m}" class="${i===0?"on":""}">${m}</button>`).join("")}</div>
+
+      <div id="mixteBox" class="hidden">
+        <div class="row">
+          <div class="field"><label>Reçu par MVola (Ar)</label><input id="pMvola" type="number" min="0" step="500" value="0" inputmode="numeric"></div>
+          <div class="field"><label>Reçu par Orange (Ar)</label><input id="pOrange" type="number" min="0" step="500" value="0" inputmode="numeric"></div>
+        </div>
+        <div class="warnbox" id="resteCash"></div>
+      </div>
+
+      <div id="cashBox">
+        <div class="field"><label id="lblRecu">Argent donné par le client (Ar)</label><input id="recu" type="number" min="0" step="500" inputmode="numeric" placeholder="ex. 10000"></div>
+        <div class="billets" id="billets"></div>
+        <div class="rendu" id="renduBox"><b id="rendu">—</b><span>monnaie à rendre</span></div>
+      </div>
+
       <div class="field"><label>Clôturé par</label>${staffSelect("par")}</div>
       <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Encaisser et libérer</button></div>
     </form>`);
@@ -613,14 +761,73 @@ function modalTerminer(id) {
     return { fin, c };
   };
   bindOffreAuto("achat","offert");
-  ["fin","achat","offert"].forEach(i => $(i).addEventListener("input", recalc));
-  recalc();
+  let mode = MODES_PAIEMENT[0];
+
+  /* montant qui doit être payé en espèces selon le mode choisi */
+  const partsMobile = () => ({
+    mvola:  mode === "MVola" ? recalc().c.montant : (mode === "Mixte" ? Number($("pMvola").value || 0) : 0),
+    orange: mode === "Orange Money" ? recalc().c.montant : (mode === "Mixte" ? Number($("pOrange").value || 0) : 0),
+  });
+  const duEspeces = () => {
+    const c = recalc().c, p = partsMobile();
+    return Math.max(0, c.montant - p.mvola - p.orange);
+  };
+
+  const majMode = () => {
+    $("mixteBox").classList.toggle("hidden", mode !== "Mixte");
+    $("cashBox").classList.toggle("hidden", mode === "MVola" || mode === "Orange Money");
+    if (mode === "Mixte") {
+      const c = recalc().c, p = partsMobile(), reste = c.montant - p.mvola - p.orange;
+      $("resteCash").innerHTML = reste >= 0
+        ? `Total ${fmtAr(c.montant)} — reste à payer en espèces : <b>${fmtAr(reste)}</b>`
+        : `⚠️ Mobile money saisi (${fmtAr(p.mvola + p.orange)}) supérieur au total ${fmtAr(c.montant)}`;
+      $("lblRecu").textContent = "Espèces données par le client (Ar)";
+    } else {
+      $("lblRecu").textContent = "Argent donné par le client (Ar)";
+    }
+  };
+
+  $("payBox").addEventListener("click", e => {
+    const b = e.target.closest("button[data-mode]"); if (!b) return;
+    mode = b.dataset.mode;
+    $("payBox").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    majMode(); majBillets(); majRendu();
+  });
+  ["pMvola","pOrange"].forEach(i => $(i).addEventListener("input", () => { majMode(); majBillets(); majRendu(); }));
+
+  const majRendu = () => {
+    const du = duEspeces(), recu = Number($("recu").value || 0);
+    const box = $("renduBox");
+    if (!recu) { $("rendu").textContent = "—"; box.classList.remove("miss"); return; }
+    const diff = recu - du;
+    $("rendu").textContent = diff >= 0 ? fmtAr(diff) : "manque " + fmtAr(-diff);
+    box.classList.toggle("miss", diff < 0);
+  };
+  const majBillets = () => {
+    const du = duEspeces();
+    const props = [...new Set([du, Math.ceil(du/1000)*1000, Math.ceil(du/5000)*5000, Math.ceil(du/10000)*10000, du+10000])]
+      .filter(v => v >= du).sort((a,b) => a-b).slice(0,4);
+    $("billets").innerHTML = props.map(v => `<button type="button" data-recu="${v}">${fmtAr(v)}</button>`).join("");
+  };
+  $("billets").addEventListener("click", e => {
+    const b = e.target.closest("button[data-recu]"); if (!b) return;
+    $("recu").value = b.dataset.recu; majRendu();
+  });
+  $("recu").addEventListener("input", majRendu);
+  ["fin","achat","offert"].forEach(i => $(i).addEventListener("input", () => { recalc(); majMode(); majBillets(); majRendu(); }));
+  recalc(); majMode(); majBillets();
   $("f").addEventListener("submit", async e => {
     e.preventDefault();
     const { fin, c } = recalc(); const par = readStaff("par");
     try {
-      await updateDoc(doc(db,"sessions",id), { fin: Timestamp.fromMillis(fin), statut: "terminee", achat: Number($("achat").value||0), offert: $("offert").checked, blocs: c.blocs, duree_min: Math.round(c.minutes), montant: c.montant, cloturePar: par, clotureLe: Timestamp.now() });
-      closeModal(); toast("Table " + s.table + " libérée · " + fmtAr(c.montant));
+      const p = partsMobile(), duCash = Math.max(0, c.montant - p.mvola - p.orange);
+      if (mode === "Mixte" && p.mvola + p.orange > c.montant) { toast("Le mobile money dépasse le total à payer", true); return; }
+      const recu = (mode === "MVola" || mode === "Orange Money") ? 0 : Number($("recu").value || 0);
+      if (duCash > 0 && recu && recu < duCash) { toast("Espèces insuffisantes : il manque " + fmtAr(duCash - recu), true); return; }
+      await updateDoc(doc(db,"sessions",id), { fin: Timestamp.fromMillis(fin), statut: "terminee", achat: Number($("achat").value||0), offert: $("offert").checked, blocs: c.blocs, duree_min: Math.round(c.minutes), montant: c.montant, mode_paiement: mode, pay_especes: duCash, pay_mvola: p.mvola, pay_orange: p.orange, recu, rendu: Math.max(0, recu - duCash), cloturePar: par, clotureLe: Timestamp.now() });
+      if (AL[id]) delete AL[id];
+      closeModal();
+      toast("Table " + s.table + " libérée · " + fmtAr(c.montant) + (recu > duCash ? " · rendre " + fmtAr(recu - duCash) : ""));
     } catch (err) { fail(err); }
   });
 }
@@ -743,6 +950,19 @@ document.addEventListener("click", async e => {
   const a = b.dataset.action, id = b.dataset.id;
   switch (a) {
     case "close": closeModal(); break;
+    case "ack": { if (AL[id]) AL[id].acked = true; renderAlerts(); break; }
+    case "prolonger": {
+      const s = S.sessions.find(x => x.id === id); if (!s) break;
+      const add = Number(b.dataset.min || 30);
+      const ecoule = (Date.now() - tsMs(s.debut)) / 60000;
+      const base = Number(s.duree_prevue || 0) || Math.ceil(ecoule / 30) * 30;
+      try {
+        await updateDoc(doc(db,"sessions",id), { duree_prevue: base + add });
+        if (AL[id]) { AL[id].fired = false; AL[id].warned = false; AL[id].acked = false; }
+        toast(`${s.nom} : prolongé, total ${fmtDur(base + add)}`);
+      } catch (err) { fail(err); }
+      break;
+    }
     case "logout": S.unsubs.forEach(u => u()); S.unsubs = []; await signOut(auth); closeModal(); toast("Mode admin désactivé"); break;
     case "demarrer": modalDemarrer(Number(b.dataset.t)); break;
     case "arrivee": { const r = S.resas.find(x => x.id === id); if (r) modalDemarrer(Number(r.table), r); break; }
@@ -772,13 +992,44 @@ $("jAll").addEventListener("change", renderJournal);
 $("jToday").addEventListener("click", () => { $("jDate").value = todayStr(); $("jAll").checked = false; renderJournal(); });
 $("resaShowOld").addEventListener("change", renderResas);
 $("jSearch").addEventListener("input", renderJoueurs);
+function recapTexte() {
+  const all = $("jAll").checked, day = $("jDate").value || todayStr();
+  const list = S.sessions.filter(s => s.statut === "terminee" && (all || todayStr(new Date(tsMs(s.debut))) === day));
+  let tot = 0, mins = 0;
+  for (const s of list) { tot += Number(s.montant || 0); mins += Number(s.duree_min || 0); }
+  const parMode = repartition(list);
+  const enCoursTxt = S.sessions.filter(s => s.statut === "en_cours").map(s => `T${s.table} (${s.nom})`).join(", ");
+  const lignes = [
+    `🎱 BILLARD CHEERZ — ${all ? "60 derniers jours" : fmtDateLong(day)}`,
+    ``,
+    `Parties : ${list.length}`,
+    `Temps joué : ${fmtDur(mins)}`,
+    `Total encaissé : ${fmtAr(tot)}`,
+    ...Object.keys(parMode).filter(m => parMode[m]).map(m => `  · ${m} : ${fmtAr(parMode[m])}`),
+  ];
+  if (enCoursTxt) lignes.push(``, `Encore en jeu : ${enCoursTxt}`);
+  return lignes.join("\n");
+}
+
+$("jRecap").addEventListener("click", async () => {
+  const txt = recapTexte();
+  try {
+    if (navigator.share) { await navigator.share({ text: txt }); return; }
+    await navigator.clipboard.writeText(txt);
+    toast("Récap copié — colle-le dans WhatsApp");
+  } catch (e) {
+    openModal(`<h2>Récap du jour</h2><textarea rows="12" style="font-size:14px">${esc(txt)}</textarea>
+      <div class="foot"><button class="primary" data-action="close">Fermer</button></div>`);
+  }
+});
+
 $("jCsv").addEventListener("click", () => {
   const all = $("jAll").checked, day = $("jDate").value || todayStr();
   const rows = S.sessions.filter(s => all || todayStr(new Date(tsMs(s.debut))) === day).sort((a,b) => tsMs(a.debut) - tsMs(b.debut));
-  const head = ["date","debut","fin","table","nom","contact","duree_min","tranches","offert","achat_ar","montant_ar","saisi_par","cloture_par","note"];
+  const head = ["date","debut","fin","table","nom","contact","duree_prevue_min","duree_min","tranches","offert","achat_ar","montant_ar","mode_paiement","especes_ar","mvola_ar","orange_ar","recu_ar","rendu_ar","saisi_par","cloture_par","note"];
   const csv = [head.join(";")].concat(rows.map(s => {
     const d = tsMs(s.debut), f = tsMs(s.fin);
-    return [todayStr(new Date(d)), fmtTime(d), f ? fmtTime(f) : "", s.table, s.nom, s.contact||"", s.duree_min||"", s.blocs||"", s.offert ? "oui" : "non", s.achat||0, s.montant??"", s.par||"", s.cloturePar||"", s.note||""]
+    return [todayStr(new Date(d)), fmtTime(d), f ? fmtTime(f) : "", s.table, s.nom, s.contact||"", s.duree_prevue||"", s.duree_min||"", s.blocs||"", s.offert ? "oui" : "non", s.achat||0, s.montant??"", s.mode_paiement||"", s.pay_especes??"", s.pay_mvola??"", s.pay_orange??"", s.recu??"", s.rendu??"", s.par||"", s.cloturePar||"", s.note||""]
       .map(v => `"${String(v).replace(/"/g,'""')}"`).join(";");
   })).join("\n");
   const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8" });
