@@ -75,6 +75,24 @@
   .t-due small{color:#CFE9DA}
   .t-resa{font-size:14px;padding:8px 10px;border-radius:8px;background:rgba(91,164,214,.15);border-left:3px solid var(--chalk);color:var(--cream)}
   .t-resa.warn{background:rgba(232,163,61,.18);border-left-color:var(--amber)}
+  .t-conflit{font-size:14px;padding:10px;border-radius:8px;background:rgba(217,83,79,.22);border-left:3px solid var(--red);color:var(--cream)}
+  .t-conflit>b{display:block;margin-bottom:2px}
+  .t-conflit small{display:block;opacity:.85;line-height:1.35}
+  .t-conflit-act{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .t-conflit-act button{flex:1;min-width:110px;padding:8px 10px;font-size:13px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:var(--cream);cursor:pointer}
+  .t-conflit-act button:hover{background:rgba(255,255,255,.2)}
+  .ol{display:flex;align-items:flex-start;gap:12px;padding:11px 12px;border-radius:9px;
+      background:rgba(255,255,255,.04);border:1px solid var(--line);margin-bottom:8px;flex-wrap:wrap}
+  .ol-main{flex:1 1 220px;min-width:0}
+  .ol-main b{display:block;font-size:15px;color:var(--cream)}
+  .ol-main small{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+  .ol-prix{font-size:16px;font-weight:700;color:var(--gold,#e8a33d);white-space:nowrap;align-self:center}
+  .ol-act{display:flex;gap:6px;align-items:center;flex-shrink:0}
+  .ol-act button{padding:6px 10px;font-size:13px;border-radius:7px}
+  .ol.bas{border-left:3px solid var(--red)}
+  .ol.on{border-left:3px solid #5bbd7a}
+  .ol-stock{font-size:19px;font-weight:700;color:var(--cream);min-width:34px;text-align:right;align-self:center}
   .t-resa.late{background:rgba(217,83,79,.2);border-left-color:var(--red)}
   .table .actions{display:flex;gap:8px;margin-top:4px}
   .table .actions button{flex:1}
@@ -230,6 +248,7 @@
   <button data-tab="resa">Réservations<span class="n" id="nResa">0</span></button>
   <button data-tab="journal">Journal</button>
   <button data-tab="joueurs">Joueurs</button>
+  <button data-tab="offres" id="tabOffres" hidden>Offres</button>
 </nav>
 
 <main>
@@ -287,6 +306,47 @@
     </div>
     <div class="card" id="joueursList"></div>
   </section>
+
+  <section id="tab-offres">
+    <div class="card">
+      <h3>Grille tarifaire</h3>
+      <p class="note">Le prix ferme d'une durée. Tant qu'elle est vide, l'application facture
+        à la tranche comme avant. Dès qu'il y a au moins un palier, c'est la grille qui décide.</p>
+      <div id="grilleList"></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" data-action="grille-edit">Modifier la grille</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Packs et promotions</h3>
+      <p class="note">Les offres à prix fixe que tu proposes. Elles n'apparaissent au moment
+        d'encaisser que les jours où elles sont valables.</p>
+      <div id="offresList"></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" data-action="offre-new">+ Nouvelle offre</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Consommables</h3>
+      <p class="note">Craie, procédés, drap, queues. Sous le seuil, la ligne devient rouge
+        et un rappel s'affiche sur l'écran des tables.</p>
+      <div id="consoList"></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" data-action="conso-new">+ Ajouter un consommable</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>L'équipe</h3>
+      <p class="note">Les prénoms proposés dans « Saisi par » et « Clôturé par ».</p>
+      <div id="staffList"></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" data-action="staff-edit">Modifier l'équipe</button>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
@@ -307,13 +367,23 @@ const firebaseConfig = {
 };
 const ADMIN_EMAIL = "mikaela.mamitiana@gmail.com";   // même email que dans les règles Firestore
 
-/* Réglages métier */
-const NB_TABLES     = 4;
-const PRIX_BLOC     = 3000;    // Ar par tranche de 30 min (=> 6000 Ar / heure)
-const BLOC_MIN      = 30;
-const TOLERANCE_MIN = 5;       // marge avant de facturer la tranche suivante (35 min = 1 bloc)
-const SEUIL_OFFRE   = 10000;   // achat >= ce montant => 30 min offertes
-const STAFF = ["Sisih","Patrick","Tommy","Haja","Satchio","Mikaela"];
+/* Réglages métier. Ces valeurs ne sont que des secours : au démarrage elles
+   sont remplacées par celles du document /reglages/salle dans Firestore, que
+   tu modifies toi-même depuis l'onglet Offres. */
+let NB_TABLES     = 4;
+let PRIX_BLOC     = 3000;    // Ar par tranche de 30 min, si aucune grille
+let BLOC_MIN      = 30;
+let TOLERANCE_MIN = 5;       // marge avant de facturer la tranche suivante
+let SEUIL_OFFRE   = 10000;   // achat >= ce montant => 30 min offertes
+let STAFF = ["Sisih","Patrick (cuisine)","Patrick (billard)","Eugénie","Lanto",
+             "Nirina (cuisine)","Nirina (salle)","Princia","Mikaela"];
+
+/* Grille tarifaire par durée. Vide = ancien calcul (prix × tranches). */
+let GRILLE  = [];            // [{max: minutes, prix: Ar}]
+let AU_DELA = { pas: 30, prix: 3000 };
+let OFFRES  = [];            // packs : [{id,nom,prix,duree,inclus,du,au,jours[],actif}]
+let CONSOS  = [];            // [{nom, stock, seuil}]
+let REGLAGES_DOC = null;
 const DUREES_RESA    = [30,60,90,120,150,180,210,240,270,300,330,360];
 const DUREES_PREVUES = [0,30,60,90,120,150,180,210,240,270,300,330,360];   // 0 = non précisée
 const ALERTE_AVANT   = 5;      // premier bip X minutes avant la fin
@@ -386,12 +456,97 @@ function tsMs(t) { return t && typeof t.toMillis === "function" ? t.toMillis() :
 function normContact(c) { return String(c||"").replace(/\D/g,""); }
 function joueurId(nom, contact) { const c = normContact(contact); return c.length >= 6 ? "c_" + c : "n_" + String(nom||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-"); }
 
-/* Tarification : blocs de 30 min, tolérance, 30 min offertes */
+/* « Mr Tsiry » et « tsiry » : même écriture normalisée. */
+function normNom(n) {
+  return String(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/\b(mr|mme|mlle|m|monsieur|madame|dr)\b\.?/g,"").replace(/[^a-z0-9]/g,"");
+}
+/* Deux numéros connus qui diffèrent = deux personnes différentes, même nom ou pas. */
+function memePersonne(a, b) {
+  if (!a || !b) return false;
+  const ca = normContact(a.contact), cb = normContact(b.contact);
+  if (ca && cb) return ca === cb;
+  const na = normNom(a.nom), nb = normNom(b.nom);
+  return !!na && na === nb;
+}
+function finPrevue(s) {
+  const p = Number(s && s.duree_prevue || 0);
+  return p ? tsMs(s.debut) + p*60000 : null;
+}
+/* La réservation r tombe-t-elle pendant la partie s ? */
+function chevauche(s, r) {
+  const f = finPrevue(s); if (!f) return false;
+  const d = hmToMs(r.jour, r.heure);
+  return d < f && d + Number(r.duree)*60000 > tsMs(s.debut);
+}
+/* Quelles tables sont réellement libres à telle heure, pour telle durée ? */
+function tablesLibresA(debutMs, dureeMin) {
+  const finMs = debutMs + Number(dureeMin)*60000, libres = [];
+  for (let t = 1; t <= NB_TABLES; t++) {
+    const s = enCours(t);
+    if (s) { const f = finPrevue(s); if (f === null || debutMs < f) continue; }
+    const prise = S.resas.some(x => Number(x.table) === t && x.statut === "a_venir"
+      && debutMs < hmToMs(x.jour, x.heure) + Number(x.duree)*60000
+      && finMs > hmToMs(x.jour, x.heure));
+    if (!prise) libres.push(t);
+  }
+  return libres;
+}
+/* 2026-11-01 → 01/11/2026 */
+function fmtJour(iso) {
+  if (!iso || iso.length < 10) return iso || "";
+  return iso.slice(8,10) + "/" + iso.slice(5,7) + "/" + iso.slice(0,4);
+}
+
+/* Prix d'une durée selon la grille. null si aucune grille n'est définie. */
+function prixGrille(minutes) {
+  if (!GRILLE.length) return null;
+  const m = Math.max(0, minutes - TOLERANCE_MIN);
+  for (const p of GRILLE) if (m <= p.max) return p.prix;
+  const dernier = GRILLE[GRILLE.length - 1];
+  const pas = Math.max(1, Number(AU_DELA.pas) || 30);
+  return dernier.prix + Math.ceil((m - dernier.max) / pas) * (Number(AU_DELA.prix) || 0);
+}
+
+/* Tarification : grille si elle existe, sinon blocs de 30 min */
 function calcTarif(debutMs, finMs, achat, offert) {
   const minutes = Math.max(0, (finMs - debutMs) / 60000);
-  let blocs = Math.max(1, Math.ceil((minutes - TOLERANCE_MIN) / BLOC_MIN));
+  const blocs = Math.max(1, Math.ceil((minutes - TOLERANCE_MIN) / BLOC_MIN));
   const blocsFactures = Math.max(0, blocs - (offert ? 1 : 0));
-  return { minutes, blocs, blocsFactures, montant: blocsFactures * PRIX_BLOC };
+  const g = prixGrille(minutes);
+  if (g === null) return { minutes, blocs, blocsFactures, grille: false,
+                           montant: blocsFactures * PRIX_BLOC };
+  const remise = offert && blocs > 0 ? Math.round(g / blocs) : 0;
+  return { minutes, blocs, blocsFactures, grille: true, montant: Math.max(0, g - remise) };
+}
+
+/* Les packs valables ici et maintenant. */
+function offresValides(quand) {
+  const j = new Date(quand || Date.now()).getDay(), jour = todayStr(new Date(quand || Date.now()));
+  return (OFFRES || []).filter(o => o && o.actif !== false
+    && (!o.du || jour >= o.du) && (!o.au || jour <= o.au)
+    && (!Array.isArray(o.jours) || !o.jours.length || o.jours.includes(j)));
+}
+
+/* Les réglages viennent de Firestore ; le code ne sert que de secours. */
+function appliquerReglages(d) {
+  if (!d) return;
+  const num = (v, def) => (v !== undefined && v !== null && Number.isFinite(Number(v))) ? Number(v) : def;
+  NB_TABLES     = Math.max(1, num(d.nbTables, NB_TABLES));
+  PRIX_BLOC     = Math.max(0, num(d.prixBloc, PRIX_BLOC));
+  BLOC_MIN      = Math.max(1, num(d.blocMin, BLOC_MIN));
+  TOLERANCE_MIN = Math.max(0, num(d.toleranceMin, TOLERANCE_MIN));
+  SEUIL_OFFRE   = Math.max(0, num(d.seuilOffre, SEUIL_OFFRE));
+  if (Array.isArray(d.staff) && d.staff.length) STAFF = d.staff;
+  GRILLE = (Array.isArray(d.grille) ? d.grille : [])
+    .filter(p => p && Number(p.max) > 0)
+    .map(p => ({ max: Number(p.max), prix: Math.max(0, Number(p.prix) || 0) }))
+    .sort((a, b) => a.max - b.max);
+  AU_DELA = (d.auDela && Number(d.auDela.pas) > 0)
+    ? { pas: Number(d.auDela.pas), prix: Math.max(0, Number(d.auDela.prix) || 0) }
+    : { pas: BLOC_MIN, prix: PRIX_BLOC };
+  OFFRES = Array.isArray(d.offres) ? d.offres : [];
+  CONSOS = Array.isArray(d.consommables) ? d.consommables : [];
 }
 
 /* ---- son des alertes ---- */
@@ -513,6 +668,14 @@ function startListeners() {
     $("joueursDL").innerHTML = S.joueurs.map(j => `<option value="${esc(j.nom)}">${esc(j.contact||"")}</option>`).join("");
     renderJoueurs();
   }, onErr));
+
+  /* Les réglages : grille, offres, consommables, équipe. Lus en direct, donc
+     une modification se voit sur tous les téléphones sans recharger. */
+  S.unsubs.push(onSnapshot(doc(db,"reglages","salle"), snap => {
+    REGLAGES_DOC = snap.exists() ? snap.data() : null;
+    appliquerReglages(REGLAGES_DOC);
+    renderAll();
+  }, e => console.warn("réglages non lus, valeurs par défaut", e)));
 }
 window.addEventListener("online",  () => $("statusText").textContent = "reconnexion…");
 window.addEventListener("offline", () => setStatus(false, "hors ligne"));
@@ -520,7 +683,73 @@ window.addEventListener("offline", () => setStatus(false, "hors ligne"));
 /* ============================================================
    9. Rendu
    ============================================================ */
-function renderAll() { renderTables(); renderResas(); renderJournal(); renderPlanning(); }
+function renderAll() { renderTables(); renderResas(); renderJournal(); renderPlanning(); renderOffres(); }
+
+/* ============================================================
+   OFFRES — grille, packs, consommables, équipe. Admin seulement.
+   ============================================================ */
+const JOURS_COURTS = ["dim","lun","mar","mer","jeu","ven","sam"];
+
+/* Tout est rangé dans un seul document : /reglages/salle */
+async function majReglages(champs) {
+  try { await setDoc(doc(db,"reglages","salle"), champs, { merge: true }); return true; }
+  catch (err) { fail(err); return false; }
+}
+
+function renderOffres() {
+  const ong = $("tabOffres"); if (ong) ong.hidden = !S.isAdmin;
+  if (!S.isAdmin) return;
+
+  const g = $("grilleList");
+  if (g) g.innerHTML = GRILLE.length
+    ? GRILLE.map(p => `<div class="ol"><div class="ol-main"><b>Jusqu'à ${fmtDur(p.max)}</b></div>
+        <span class="ol-prix">${fmtAr(p.prix)}</span></div>`).join("")
+      + `<div class="ol"><div class="ol-main"><b>Au-delà</b>
+           <small>par tranche de ${fmtDur(AU_DELA.pas)} entamée</small></div>
+         <span class="ol-prix">+ ${fmtAr(AU_DELA.prix)}</span></div>`
+    : `<div class="empty">Aucune grille — l'application facture ${fmtAr(PRIX_BLOC)} par tranche de ${BLOC_MIN} min.</div>`;
+
+  const o = $("offresList");
+  if (o) {
+    const valides = offresValides().map(x => x.id);
+    o.innerHTML = (OFFRES && OFFRES.length) ? OFFRES.map(x => {
+      const actif = valides.includes(x.id);
+      const contenu = [x.duree ? fmtDur(x.duree) + " de jeu" : "", esc(x.inclus || "")].filter(Boolean).join(" + ");
+      const quand = [
+        (x.du || x.au) ? `${x.du ? "du " + fmtJour(x.du) : ""}${x.au ? " au " + fmtJour(x.au) : ""}`.trim() : "",
+        (Array.isArray(x.jours) && x.jours.length && x.jours.length < 7)
+          ? "les " + x.jours.slice().sort().map(j => JOURS_COURTS[j]).join(", ") : "",
+        x.actif === false ? "désactivée" : (actif ? "valable aujourd'hui" : "pas aujourd'hui"),
+      ].filter(Boolean).join(" · ");
+      return `<div class="ol ${actif ? "on" : ""}">
+        <div class="ol-main"><b>${esc(x.nom)}</b><small>${contenu || "prix fixe"}<br>${esc(quand)}</small></div>
+        <span class="ol-prix">${fmtAr(x.prix)}</span>
+        <span class="ol-act">
+          <button class="ghost" data-action="offre-edit" data-id="${esc(x.id)}">Modifier</button>
+          <button class="danger" data-action="offre-del" data-id="${esc(x.id)}">✕</button>
+        </span></div>`;
+    }).join("") : `<div class="empty">Aucune offre. Crée ton premier pack avec le bouton ci-dessous.</div>`;
+  }
+
+  const c = $("consoList");
+  if (c) c.innerHTML = (CONSOS && CONSOS.length) ? CONSOS.map((x, i) => {
+      const bas = Number(x.stock) <= Number(x.seuil || 0);
+      return `<div class="ol ${bas ? "bas" : ""}">
+        <div class="ol-main"><b${bas ? ' style="color:var(--red)"' : ""}>${esc(x.nom)}</b>
+          <small>alerte en dessous de ${Number(x.seuil) || 0}${bas ? " — à racheter" : ""}</small></div>
+        <span class="ol-stock">${Number(x.stock) || 0}</span>
+        <span class="ol-act">
+          <button class="ghost" data-action="conso-moins" data-i="${i}">−1</button>
+          <button class="ghost" data-action="conso-plus"  data-i="${i}">+1</button>
+          <button class="ghost" data-action="conso-edit"  data-i="${i}">Modifier</button>
+          <button class="danger" data-action="conso-del"  data-i="${i}">✕</button>
+        </span></div>`;
+    }).join("") : `<div class="empty">Aucun consommable suivi.</div>`;
+
+  const st = $("staffList");
+  if (st) st.innerHTML = `<div class="ol"><div class="ol-main"><b>${STAFF.map(esc).join(" · ")}</b>
+      <small>${STAFF.length} personne${STAFF.length > 1 ? "s" : ""}</small></div></div>`;
+}
 
 /* ============================================================
    PLANNING — qui occupe quelle table, et à quelle heure c'est libre
@@ -687,6 +916,11 @@ function etatTable(t) {
 }
 function renderAlerts() {
   let html = "";
+  const bas = (CONSOS || []).filter(x => Number(x.stock) <= Number(x.seuil || 0));
+  if (bas.length && S.isAdmin) {
+    html += `<div class="alert">📦<span>Stock bas : ${bas.map(x => esc(x.nom) + " (" + (Number(x.stock)||0) + ")").join(", ")}</span>
+      <button data-action="tab-offres">Voir</button></div>`;
+  }
   for (let t = 1; t <= NB_TABLES; t++) {
     const s = enCours(t); if (!s) continue;
     const prevu = Number(s.duree_prevue || 0); if (!prevu) continue;
@@ -715,6 +949,33 @@ function renderTables() {
       const cls = diff < 0 ? "late" : (diff <= 45 ? "warn" : "");
       const when = diff < 0 ? `attendu depuis ${fmtDur(-diff)}` : (diff <= 45 ? `dans ${fmtDur(diff)}` : "");
       resaHtml = `<div class="t-resa ${cls}">Réservée ${r.heure} · ${esc(r.nom)} ${when ? "<small>— "+when+"</small>" : ""}</div>`;
+    }
+    /* La table est en jeu ET une réservation tombe pendant la partie. */
+    if (s && r && chevauche(s, r)) {
+      const f = finPrevue(s);
+      const ca = normContact(s.contact), cb = normContact(r.contact);
+      const meme = memePersonne(s, r), memeNom = normNom(s.nom) === normNom(r.nom);
+      let expl;
+      if (meme && ca && ca === cb)
+        expl = `Même numéro que la personne qui joue — elle est arrivée en avance.`;
+      else if (meme)
+        expl = `Même nom que la personne qui joue, mais aucun numéro pour en être sûr. Vérifie avant de rattacher.`;
+      else if (memeNom)
+        expl = `Même nom que ${esc(s.nom)} qui joue, mais <b>numéro différent : ce ne sont pas les mêmes personnes.</b> En jeu jusque vers ${fmtTime(f)}.`;
+      else
+        expl = `En jeu : ${esc(s.nom)}, jusque vers ${fmtTime(f)}.`;
+      const libres = meme ? [] : tablesLibresA(hmToMs(r.jour, r.heure), Number(r.duree));
+      const dispo = meme ? "" : `<small>${libres.length
+        ? `Libres à ${r.heure} : table ${libres.join(", ")}.`
+        : `Aucune autre table n'est libre à ${r.heure}.`}</small>`;
+      resaHtml = `<div class="t-conflit">
+        <b>⚠ Réservation ${r.heure} · ${esc(r.nom)}${r.contact ? " · " + esc(r.contact) : ""}</b>
+        <small>${expl}</small>${dispo}
+        <div class="t-conflit-act">
+          ${meme ? `<button data-action="rattacher" data-id="${esc(r.id)}">C'est le même client</button>` : ""}
+          <button data-action="edit-resa" data-id="${esc(r.id)}">Déplacer</button>
+          <button data-action="annuler-resa" data-id="${esc(r.id)}">Annuler</button>
+        </div></div>`;
     }
     if (s) {
       const debut = tsMs(s.debut);
@@ -893,6 +1154,7 @@ function bindOffreAuto(achatId, offertId) {
 function modalDemarrer(t, resa) {
   const r = resa || prochaineResa(t);
   const warn = (!resa && r) ? `<div class="warnbox">Cette table est réservée à ${esc(r.heure)} pour ${esc(r.nom)}. Si c'est cette personne, utilise plutôt « Client arrivé ».</div>` : "";
+  const rSuiv = (!resa && r) ? r : null;
   openModal(`<h2>Table ${t} — démarrer</h2>${warn}
     <form id="f">
       <div class="field"><label>Nom du joueur</label><input id="nom" list="joueursDL" required value="${esc(r && resa ? r.nom : "")}" autocomplete="off"></div>
@@ -906,12 +1168,54 @@ function modalDemarrer(t, resa) {
         <div class="field"><label>Durée prévue (ce que dit le client)</label>${dureePrevueSelect("prevu", resa ? resa.duree : 0)}</div>
         <div class="field"><label>Saisi par</label>${staffSelect("par")}</div>
       </div>
+      <div id="dispoResa"></div>
       <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button><button type="submit" class="primary">Démarrer</button></div>
     </form>`);
   fillContactFromName("nom","contact"); bindOffreAuto("achat","offert");
+  if (rSuiv) {
+    const z = $("dispoResa");
+    const debutSaisi = () => {
+      let d = hmToMs(todayStr(), $("heure").value || nowHM());
+      return (d > Date.now() + 60000) ? Date.now() : d;
+    };
+    const maj = () => {
+      const dispo = Math.round((hmToMs(rSuiv.jour, rSuiv.heure) - debutSaisi()) / 60000);
+      const choisi = Number($("prevu").value || 0);
+      const qui = `${esc(rSuiv.heure)} pour ${esc(rSuiv.nom)}`;
+      if (dispo <= 0) { z.className = "warnbox";
+        z.innerHTML = `<b>L'heure de la réservation de ${qui} est déjà passée.</b> Si ce n'est pas cette personne, préviens-la.`;
+      } else if (!choisi) { z.className = "warnbox";
+        z.innerHTML = `Réservation à ${qui}, dans ${fmtDur(dispo)}. Sans durée prévue, personne ne saura si la partie déborde.`;
+      } else if (choisi > dispo) { z.className = "warnbox";
+        z.innerHTML = `<b>Trop long de ${fmtDur(choisi - dispo)}.</b> Réservation à ${qui} : il reste ${fmtDur(dispo)}. Avec ${fmtDur(choisi)}, la partie finira vers ${fmtTime(debutSaisi() + choisi*60000)}.`;
+      } else { z.className = "note";
+        z.innerHTML = `${fmtDur(dispo)} disponibles avant la réservation de ${qui}. ${fmtDur(choisi)} tient sans problème.`;
+      }
+    };
+    $("prevu").addEventListener("change", maj);
+    $("heure").addEventListener("change", maj);
+    maj();
+  }
   $("f").addEventListener("submit", async e => {
     e.preventDefault();
     if (enCours(t)) { toast("La table " + t + " est déjà occupée", true); return; }
+    /* La durée choisie mord-elle sur la réservation qui arrive ? */
+    if (rSuiv) {
+      const prevu = Number($("prevu").value || 0);
+      let d0 = hmToMs(todayStr(), $("heure").value); if (d0 > Date.now() + 60000) d0 = Date.now();
+      const resaDeb = hmToMs(rSuiv.jour, rSuiv.heure);
+      if (prevu && d0 + prevu*60000 > resaDeb) {
+        const dispo = Math.round((resaDeb - d0) / 60000);
+        const libres = tablesLibresA(resaDeb, Number(rSuiv.duree)).filter(x => x !== t);
+        if (!confirm(`Table ${t} — réservation à ${rSuiv.heure} pour ${rSuiv.nom}.\n\n`
+          + `Avec ${fmtDur(prevu)}, la partie finira vers ${fmtTime(d0 + prevu*60000)} — `
+          + `${fmtDur(prevu - dispo)} de trop.\n`
+          + `Il reste ${dispo > 0 ? fmtDur(dispo) : "zéro minute"} avant la réservation.\n\n`
+          + (libres.length ? `Libres à ${rSuiv.heure} : table ${libres.join(", ")}. Tu peux y déplacer ${rSuiv.nom}.\n\n`
+                           : `Aucune autre table n'est libre à ${rSuiv.heure}.\n\n`)
+          + `Démarrer quand même ?`)) return;
+      }
+    }
     const nom = $("nom").value.trim(), contact = $("contact").value.trim(), achat = Number($("achat").value||0), offert = $("offert").checked;
     let debut = hmToMs(todayStr(), $("heure").value); if (debut > Date.now() + 60000) debut = Date.now();
     const par = readStaff("par");
@@ -940,6 +1244,11 @@ function modalTerminer(id) {
         <div class="field"><label>Achat bar / resto (Ar)</label><input id="achat" type="number" min="0" step="500" value="${s.achat||0}" inputmode="numeric"></div>
       </div>
       <div class="field"><label style="display:flex;align-items:center;color:var(--cream)"><input type="checkbox" id="offert" ${s.offert?"checked":""}> 30 min offertes</label></div>
+      ${offresValides().length ? `<label>Offre appliquée</label>
+      <div class="pay" id="packBox">
+        <button type="button" data-pack="" class="on">Aucune</button>
+        ${offresValides().map(o => `<button type="button" data-pack="${esc(o.id)}">${esc(o.nom)} · ${fmtAr(o.prix)}</button>`).join("")}
+      </div>` : ""}
 
       <label>Mode de paiement</label>
       <div class="pay" id="payBox">${MODES_PAIEMENT.map((m,i)=>`<button type="button" data-mode="${m}" class="${i===0?"on":""}">${m}</button>`).join("")}</div>
@@ -964,9 +1273,23 @@ function modalTerminer(id) {
   const recalc = () => {
     let fin = hmToMs(todayStr(), $("fin").value); if (fin < debut) fin += 86400000;
     const c = calcTarif(debut, fin, Number($("achat").value||0), $("offert").checked);
-    $("rDur").textContent = fmtDur(c.minutes); $("rBlocs").textContent = c.blocs + (c.blocsFactures !== c.blocs ? ` (−1 offerte = ${c.blocsFactures})` : ""); $("rMontant").textContent = fmtAr(c.montant);
+    /* Un pack choisi remplace le tarif calculé : c'est un prix ferme. */
+    const pk = packChoisi ? offresValides().find(o => o.id === packChoisi) : null;
+    if (pk) { c.montant = Number(pk.prix) || 0; c.pack = pk; }
+    $("rDur").textContent = fmtDur(c.minutes);
+    $("rBlocs").textContent = pk ? "offre « " + pk.nom + " »"
+      : (c.grille ? "grille tarifaire"
+                  : c.blocs + (c.blocsFactures !== c.blocs ? ` (−1 offerte = ${c.blocsFactures})` : ""));
+    $("rMontant").textContent = fmtAr(c.montant);
     return { fin, c };
   };
+  let packChoisi = "";
+  if ($("packBox")) $("packBox").addEventListener("click", e => {
+    const b = e.target.closest("button[data-pack]"); if (!b) return;
+    packChoisi = b.dataset.pack;
+    $("packBox").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    majMode(); majBillets(); majRendu();
+  });
   bindOffreAuto("achat","offert");
   let mode = MODES_PAIEMENT[0];
 
@@ -1031,7 +1354,7 @@ function modalTerminer(id) {
       if (mode === "Mixte" && p.mvola + p.orange > c.montant) { toast("Le mobile money dépasse le total à payer", true); return; }
       const recu = (mode === "MVola" || mode === "Orange Money") ? 0 : Number($("recu").value || 0);
       if (duCash > 0 && recu && recu < duCash) { toast("Espèces insuffisantes : il manque " + fmtAr(duCash - recu), true); return; }
-      await updateDoc(doc(db,"sessions",id), { fin: Timestamp.fromMillis(fin), statut: "terminee", achat: Number($("achat").value||0), offert: $("offert").checked, blocs: c.blocs, duree_min: Math.round(c.minutes), montant: c.montant, mode_paiement: mode, pay_especes: duCash, pay_mvola: p.mvola, pay_orange: p.orange, recu, rendu: Math.max(0, recu - duCash), cloturePar: par, clotureLe: Timestamp.now() });
+      await updateDoc(doc(db,"sessions",id), { fin: Timestamp.fromMillis(fin), statut: "terminee", achat: Number($("achat").value||0), offert: $("offert").checked, blocs: c.blocs, duree_min: Math.round(c.minutes), montant: c.montant, mode_paiement: mode, pay_especes: duCash, pay_mvola: p.mvola, pay_orange: p.orange, recu, rendu: Math.max(0, recu - duCash), cloturePar: par, clotureLe: Timestamp.now(), offre: c.pack ? c.pack.nom : null });
       if (AL[id]) delete AL[id];
       closeModal();
       toast("Table " + s.table + " libérée · " + fmtAr(c.montant) + (recu > duCash ? " · rendre " + fmtAr(recu - duCash) : ""));
@@ -1080,12 +1403,179 @@ function modalResa(existing) {
     const start = hmToMs(data.jour, data.heure), end = start + data.duree*60000;
     const clash = S.resas.find(x => x.id !== (existing&&existing.id) && Number(x.table) === data.table && x.jour === data.jour && x.statut === "a_venir" && start < hmToMs(x.jour,x.heure) + Number(x.duree)*60000 && end > hmToMs(x.jour,x.heure));
     if (clash) { toast(`Conflit : table ${data.table} déjà réservée à ${clash.heure} (${clash.nom})`, true); return; }
+    /* La table est-elle en jeu à cette heure-là ? */
+    if (data.jour === todayStr()) {
+      const sess = S.sessions.find(x => x.statut === "en_cours" && Number(x.table) === data.table);
+      if (sess) {
+        const f = finPrevue(sess);
+        if (f === null) {
+          if (!confirm(`La table ${data.table} est en jeu depuis ${fmtTime(tsMs(sess.debut))} avec ${sess.nom}, `
+            + `et aucune durée n'a été précisée.\n\nImpossible de savoir si elle sera libre à ${data.heure}.\n\n`
+            + `Réserver quand même ?`)) return;
+        } else if (start < f && end > tsMs(sess.debut)) {
+          if (!confirm(`La table ${data.table} est en jeu avec ${sess.nom} jusque vers ${fmtTime(f)}.\n\n`
+            + `La réservation de ${data.heure} tombe pendant cette partie.\n\n`
+            + `• Si c'est la même personne, ferme et utilise « C'est le même client » sur la table.\n`
+            + `• Si le joueur part plus tôt, corrige d'abord la durée prévue de la partie.\n\n`
+            + `Réserver quand même ?`)) return;
+        }
+      }
+    }
     try {
       if (existing) await updateDoc(doc(db,"reservations",existing.id), data);
       else await addDoc(collection(db,"reservations"), { ...data, statut: "a_venir", par: readStaff("par"), creeLe: Timestamp.now() });
       closeModal(); toast(existing ? "Réservation modifiée" : "Réservation enregistrée");
       if (!existing) upsertJoueur(data.nom, data.contact);
     } catch (err) { fail(err); }
+  });
+}
+
+/* ---- Grille tarifaire ------------------------------------------- */
+function modalGrille() {
+  const lignes = GRILLE.length ? GRILLE : [{max:30,prix:4000},{max:60,prix:6000},{max:90,prix:9000}];
+  const ligneHtml = p => `<div class="row">
+      <div class="field"><label>Jusqu'à (minutes)</label>
+        <input class="gmax" type="number" min="1" step="5" value="${p.max}" inputmode="numeric"></div>
+      <div class="field"><label>Prix (Ar)</label>
+        <input class="gprix" type="number" min="0" step="500" value="${p.prix}" inputmode="numeric"></div>
+    </div>`;
+  openModal(`<h2>Grille tarifaire</h2>
+    <p class="note">Un palier par ligne. Le client paie le prix du premier palier qu'il ne dépasse pas.
+      Vide une ligne pour la supprimer.</p>
+    <form id="f">
+      <div id="gLignes">${lignes.map(ligneHtml).join("")}</div>
+      <button type="button" class="ghost" id="gPlus" style="width:100%;margin:8px 0">+ Ajouter un palier</button>
+      <h3 style="margin-top:14px">Au-delà du dernier palier</h3>
+      <div class="row">
+        <div class="field"><label>Par tranche de (minutes)</label>
+          <input id="aPas" type="number" min="1" step="5" value="${AU_DELA.pas}" inputmode="numeric"></div>
+        <div class="field"><label>Prix de la tranche (Ar)</label>
+          <input id="aPrix" type="number" min="0" step="500" value="${AU_DELA.prix}" inputmode="numeric"></div>
+      </div>
+      <div class="warnbox" id="gApercu"></div>
+      <div class="foot">
+        <button type="button" class="danger" id="gVider">Supprimer la grille</button>
+        <button type="button" class="ghost" data-action="close">Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>`);
+  const lire = () => Array.from(document.querySelectorAll("#gLignes .row")).map(r => ({
+      max: Number(r.querySelector(".gmax").value || 0),
+      prix: Number(r.querySelector(".gprix").value || 0),
+    })).filter(p => p.max > 0).sort((a,b) => a.max - b.max);
+  const apercu = () => {
+    const g = lire(), pas = Number($("aPas").value) || 30, px = Number($("aPrix").value) || 0;
+    if (!g.length) { $("gApercu").textContent = "Aucun palier : l'ancien calcul à la tranche reprendra."; return; }
+    const sim = m => { for (const p of g) if (m <= p.max) return p.prix;
+      const d = g[g.length-1]; return d.prix + Math.ceil((m - d.max)/pas) * px; };
+    $("gApercu").innerHTML = "<b>Ce que paiera le client :</b><br>" +
+      [30,60,90,120,180].map(m => `${fmtDur(m)} → ${fmtAr(sim(m))}`).join(" · ");
+  };
+  $("gPlus").onclick = () => {
+    const d = document.createElement("div"); d.innerHTML = ligneHtml({max:"",prix:""});
+    $("gLignes").appendChild(d.firstElementChild); apercu();
+  };
+  $("gVider").onclick = async () => {
+    if (!confirm("Supprimer la grille ? L'application reviendra au calcul à la tranche.")) return;
+    if (await majReglages({ grille: [] })) { closeModal(); toast("Grille supprimée"); }
+  };
+  $("f").addEventListener("input", apercu); apercu();
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const g = lire();
+    if (!g.length) { toast("Mets au moins un palier, ou utilise « Supprimer la grille »", true); return; }
+    const ok = await majReglages({ grille: g,
+      auDela: { pas: Math.max(1, Number($("aPas").value)||30), prix: Math.max(0, Number($("aPrix").value)||0) } });
+    if (ok) { closeModal(); toast("Grille enregistrée"); }
+  });
+}
+
+/* ---- Pack / promotion -------------------------------------------- */
+function modalOffre(id) {
+  const x = (OFFRES || []).find(o => o.id === id) ||
+            { id:"", nom:"", prix:0, duree:60, inclus:"", du:todayStr(), au:"", jours:[], actif:true };
+  openModal(`<h2>${id ? "Modifier l'offre" : "Nouvelle offre"}</h2>
+    <form id="f">
+      <div class="field"><label>Nom de l'offre</label>
+        <input id="nom" required value="${esc(x.nom)}" placeholder="ex. Pack novembre" autocomplete="off"></div>
+      <div class="row">
+        <div class="field"><label>Prix total (Ar)</label>
+          <input id="prix" type="number" min="0" step="500" required value="${Number(x.prix)||0}" inputmode="numeric"></div>
+        <div class="field"><label>Temps de jeu inclus (minutes)</label>
+          <input id="duree" type="number" min="0" step="15" value="${Number(x.duree)||0}" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>Ce qui est inclus en plus</label>
+        <input id="inclus" value="${esc(x.inclus||"")}" placeholder="ex. 1 Gold blanche" autocomplete="off"></div>
+      <div class="row">
+        <div class="field"><label>Valable du</label><input id="du" type="date" value="${x.du||""}"></div>
+        <div class="field"><label>jusqu'au</label><input id="au" type="date" value="${x.au||""}"></div>
+      </div>
+      <label>Jours de la semaine</label>
+      <div class="pay" id="jBox">${JOURS_COURTS.map((j,i) =>
+        `<button type="button" data-j="${i}" class="${(x.jours||[]).includes(i)?"on":""}">${j}</button>`).join("")}</div>
+      <p class="note">Aucun jour sélectionné = tous les jours.</p>
+      <div class="field"><label style="display:flex;align-items:center;color:var(--cream)">
+        <input type="checkbox" id="actif" ${x.actif !== false ? "checked" : ""}> Offre active</label></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button>
+        <button type="submit" class="primary">${id ? "Enregistrer" : "Créer l'offre"}</button></div>
+    </form>`);
+  $("jBox").addEventListener("click", e => {
+    const b = e.target.closest("button[data-j]"); if (b) b.classList.toggle("on");
+  });
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const jours = Array.from(document.querySelectorAll("#jBox button.on")).map(b => Number(b.dataset.j));
+    const n = { id: id || ("o" + Date.now().toString(36)), nom: $("nom").value.trim(),
+      prix: Number($("prix").value)||0, duree: Number($("duree").value)||0,
+      inclus: $("inclus").value.trim(), du: $("du").value || "", au: $("au").value || "",
+      jours, actif: $("actif").checked };
+    const liste = (OFFRES || []).filter(o => o.id !== n.id).concat([n]);
+    if (await majReglages({ offres: liste })) { closeModal(); toast(id ? "Offre modifiée" : "Offre créée"); }
+  });
+}
+
+/* ---- Consommable -------------------------------------------------- */
+function modalConso(i) {
+  const x = (i >= 0 && CONSOS[i]) ? CONSOS[i] : { nom:"", stock:0, seuil:2 };
+  openModal(`<h2>${i >= 0 ? "Modifier" : "Nouveau consommable"}</h2>
+    <form id="f">
+      <div class="field"><label>Nom</label>
+        <input id="nom" required value="${esc(x.nom)}" placeholder="ex. Craie bleue" autocomplete="off"></div>
+      <div class="row">
+        <div class="field"><label>Stock actuel</label>
+          <input id="stock" type="number" min="0" step="1" value="${Number(x.stock)||0}" inputmode="numeric"></div>
+        <div class="field"><label>Alerter en dessous de</label>
+          <input id="seuil" type="number" min="0" step="1" value="${Number(x.seuil)||0}" inputmode="numeric"></div>
+      </div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button></div>
+    </form>`);
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const n = { nom: $("nom").value.trim(), stock: Number($("stock").value)||0, seuil: Number($("seuil").value)||0 };
+    const liste = CONSOS.slice();
+    if (i >= 0) liste[i] = n; else liste.push(n);
+    if (await majReglages({ consommables: liste })) { closeModal(); toast("Enregistré"); }
+  });
+}
+
+/* ---- L'équipe ------------------------------------------------------ */
+function modalStaff() {
+  openModal(`<h2>L'équipe</h2>
+    <p class="note">Un prénom par ligne. Ce sont les choix proposés dans « Saisi par » et « Clôturé par ».
+      Retire quelqu'un qui est parti : son nom disparaît des listes, mais reste dans l'historique.</p>
+    <form id="f">
+      <div class="field"><textarea id="st" rows="10" style="width:100%;font:inherit;padding:10px;
+        border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.05);
+        color:var(--cream)">${esc(STAFF.join("\n"))}</textarea></div>
+      <div class="foot"><button type="button" class="ghost" data-action="close">Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button></div>
+    </form>`);
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const l = $("st").value.split("\n").map(x => x.trim()).filter(Boolean);
+    if (!l.length) { toast("Il faut au moins une personne", true); return; }
+    if (await majReglages({ staff: l })) { closeModal(); toast("Équipe enregistrée"); }
   });
 }
 
@@ -1157,6 +1647,45 @@ document.addEventListener("click", async e => {
   const a = b.dataset.action, id = b.dataset.id;
   switch (a) {
     case "close": closeModal(); break;
+    case "tab-offres": { const t = $("tabOffres"); if (t) t.click(); break; }
+    case "grille-edit": modalGrille(); break;
+    case "staff-edit":  modalStaff(); break;
+    case "offre-new":   modalOffre(null); break;
+    case "offre-edit":  modalOffre(id); break;
+    case "offre-del": {
+      const x = (OFFRES||[]).find(o => o.id === id); if (!x) break;
+      if (!confirm(`Supprimer l'offre « ${x.nom} » ?`)) break;
+      await majReglages({ offres: OFFRES.filter(o => o.id !== id) });
+      toast("Offre supprimée"); break;
+    }
+    case "conso-new":  modalConso(-1); break;
+    case "conso-edit": modalConso(Number(b.dataset.i)); break;
+    case "conso-del": {
+      const i = Number(b.dataset.i), x = CONSOS[i]; if (!x) break;
+      if (!confirm(`Retirer « ${x.nom} » du suivi ?`)) break;
+      await majReglages({ consommables: CONSOS.filter((_, k) => k !== i) });
+      toast("Retiré"); break;
+    }
+    case "conso-plus": case "conso-moins": {
+      const i = Number(b.dataset.i), l = CONSOS.slice(); if (!l[i]) break;
+      l[i] = { ...l[i], stock: Math.max(0, (Number(l[i].stock)||0) + (a === "conso-plus" ? 1 : -1)) };
+      await majReglages({ consommables: l }); break;
+    }
+    /* Le client réservé était déjà arrivé : on raccroche la réservation à la partie. */
+    case "rattacher": {
+      const r = S.resas.find(x => x.id === id); if (!r) break;
+      const sess = S.sessions.find(x => x.statut === "en_cours" && Number(x.table) === Number(r.table));
+      if (!sess) { toast("Plus aucune partie en cours sur cette table", true); break; }
+      if (!confirm(`Rattacher la réservation de ${r.nom}${r.contact ? " (" + r.contact + ")" : ""} `
+        + `à la partie en cours de ${sess.nom}${sess.contact ? " (" + sess.contact + ")" : ""} ?\n\n`
+        + `À ne faire que si c'est vraiment la même personne, arrivée en avance.\n`
+        + `Sinon, la réservation disparaîtra alors que le client doit encore venir.`)) break;
+      try {
+        await updateDoc(doc(db,"reservations",id), { statut: "arrivee", sessionId: sess.id });
+        toast("Réservation rattachée à la partie en cours");
+      } catch (err) { fail(err); }
+      break;
+    }
     case "ack": { if (AL[id]) AL[id].acked = true; renderAlerts(); break; }
     case "prolonger": {
       const s = S.sessions.find(x => x.id === id); if (!s) break;
