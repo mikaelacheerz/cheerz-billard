@@ -508,6 +508,17 @@ function prixGrille(minutes) {
   return dernier.prix + Math.ceil((m - dernier.max) / pas) * (Number(AU_DELA.prix) || 0);
 }
 
+/* Ce que coûte une durée, grille d'abord, blocs de 30 min sinon.
+   Contrairement à calcTarif, une durée nulle coûte zéro : on s'en sert
+   pour faire des différences, et une base facturée d'office fausserait
+   tout. */
+function prixDuree(minutes) {
+  if (minutes <= 0) return 0;
+  const g = prixGrille(minutes);
+  if (g !== null) return g;
+  return Math.max(0, Math.ceil((minutes - TOLERANCE_MIN) / BLOC_MIN)) * PRIX_BLOC;
+}
+
 /* Tarification : grille si elle existe, sinon blocs de 30 min */
 function calcTarif(debutMs, finMs, achat, offert) {
   const minutes = Math.max(0, (finMs - debutMs) / 60000);
@@ -1290,7 +1301,15 @@ function modalTerminer(id) {
       const q = Math.max(1, Math.floor(Number(($("packQte")||{}).value) || 1));
       const inclus = q * (Number(pk.duree) || 0);
       const trop = Math.max(0, c.minutes - inclus);
-      const sup = trop > TOLERANCE_MIN ? calcTarif(0, trop * 60000, 0, false).montant : 0;
+      /* Le dépassement prolonge la partie, il n'en ouvre pas une nouvelle.
+         Le facturer comme une partie neuve appliquerait le tarif « 30 min
+         sans suite » (4 000) à une demi-heure qui, dans une partie d'1 h 30,
+         ne vaut que 3 000. On prend donc la différence sur la grille entre
+         ce qui a été joué et ce que le pack couvre : la grille reste seule
+         maîtresse du prix, et la tolérance joue toute seule.
+         Un pack sans durée incluse (duree = 0) reste un forfait : il couvre
+         toute la partie, sans supplément. */
+      const sup = inclus > 0 ? Math.max(0, prixDuree(c.minutes) - prixDuree(inclus)) : 0;
       c.pack = pk; c.packQte = q; c.inclus = inclus;
       c.supplement = sup;
       c.montantPack = q * (Number(pk.prix) || 0);
